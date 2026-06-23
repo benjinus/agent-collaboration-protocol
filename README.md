@@ -3,8 +3,9 @@
 A reusable file-based collaboration protocol for AI agents that cannot directly
 message each other.
 
-The project is also a Codex-compatible skill. Install it as a skill, or use the
-protocol files and initialization script directly in any agent workflow.
+The project is a vendor-neutral agent protocol. Install it as a native skill
+where your agent runtime supports skills, or point any file-capable agent at
+`SKILL.md` and use the protocol files directly.
 
 ## What It Does
 
@@ -20,17 +21,27 @@ The important rule is simple: agents use `state.log` to signal changes, read
 `discussion.md` for the current proposal, append their response to `opinions.md`,
 then append another state event when they are waiting for the next participant.
 
-## Install as a Codex Skill
+## Install for an Agent
 
-Copy this folder into your Codex skills directory:
+Use the same folder for any runtime that can load local instructions and
+read/write files. The protocol state lives in the collaboration folder, not in a
+vendor-specific thread or memory store.
+
+Codex example:
 
 ```bash
 mkdir -p ~/.codex/skills
-cp -R agent-collaboration-protocol ~/.codex/skills/file-collaboration-protocol
+cp -R agent-collaboration-protocol ~/.codex/skills/agent-collaboration-protocol
 ```
 
-Then ask Codex to use the `file-collaboration-protocol` skill for a shared
-folder collaboration.
+For Claude Code, OpenCode, Kiro, or other assistants, install this folder in the
+runtime's local instruction or skill location, or tell the agent:
+
+```text
+Use the Agent Collaboration Protocol from /path/to/agent-collaboration-protocol/SKILL.md.
+```
+
+See `references/open-agent-installation.md` for portable installation patterns.
 
 ## Initialize a Collaboration Folder
 
@@ -87,11 +98,11 @@ Open Questions:
 .
 ├── SKILL.md
 ├── agents/openai.yaml
+├── references/open-agent-installation.md
 ├── scripts/init_collaboration.py
 └── README.md
 ```
 
 ## License
 
-No license has been added yet. Add a license before publishing this repository
-for public reuse.
+MIT. See `LICENSE`.

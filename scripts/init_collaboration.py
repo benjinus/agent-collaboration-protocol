@@ -50,7 +50,7 @@ def write_if_missing(path: Path, content: str) -> None:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Initialize a file-based collaboration folder.")
+    parser = argparse.ArgumentParser(description="Initialize a vendor-neutral file collaboration folder.")
     parser.add_argument("--folder", required=True, help="Shared collaboration folder")
     parser.add_argument("--participant", required=True, help="Current participant id")
     parser.add_argument("--objective", required=True, help="Collaboration objective")
@@ -97,6 +97,12 @@ Rules:
 - Process only events from other participants.
 - Write opinions in the agreed structured format.
 - Stop when a completion condition is met and a `completed` event is written.
+
+Compatibility:
+- This workspace is vendor-neutral and can be used by Codex, Claude Code,
+  OpenCode, Kiro, shell scripts, IDE tasks, or any agent that can read/write
+  these files.
+- Participant identity is the `from` field in `state.log`, not a vendor account.
 """,
     )
 

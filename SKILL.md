@@ -1,13 +1,20 @@
 ---
-name: file-collaboration-protocol
-description: Use when coordinating multiple agents, teams, repos, or users through a shared filesystem folder and append-only files. Supports asynchronous plan discussion, handoff, proposal review, cross-agent negotiation, status signaling, and explicit collaboration exit conditions. Requires a collaboration folder plus a stated objective and completion conditions before starting.
+name: agent-collaboration-protocol
+description: Use when coordinating multiple AI agents, coding assistants, teams, repos, or users through a vendor-neutral shared filesystem protocol. Works across Codex, Claude Code, OpenCode, Kiro, and other agents that can read/write local files. Supports asynchronous plan discussion, handoff, proposal review, cross-agent negotiation, status signaling, and explicit collaboration exit conditions. Requires a collaboration folder plus a stated objective and completion conditions before starting.
 ---
 
-# File Collaboration Protocol
+# Agent Collaboration Protocol
 
 Use a shared folder as a small coordination bus for agents that cannot directly
-message each other. The protocol is append-only except for the shared discussion
-document, which may be edited by participants.
+message each other. This is an open file protocol, not a Codex-only workflow.
+Any agent may participate if it can read Markdown, append JSONL, and write files.
+The protocol is append-only except for the shared discussion document, which may
+be edited by participants.
+
+If installing this for another agent runtime, read
+`references/open-agent-installation.md`. The protocol files and script remain
+the same across Codex, Claude Code, OpenCode, Kiro, and similar tools; only the
+runtime's skill/custom-instruction packaging differs.
 
 ## Required Inputs
 
@@ -20,6 +27,21 @@ Before starting a collaboration, require:
 
 If any required input is missing, ask for it before creating files or writing
 state. Do not invent completion conditions.
+
+## Portability Requirements
+
+Keep every implementation platform-neutral:
+
+- Use only shared filesystem operations: create folder, read file, append line,
+  write Markdown, and optionally tail/watch a file.
+- Do not rely on Codex thread APIs, Claude-specific hooks, OpenCode-only state,
+  Kiro-only task metadata, or hidden conversation state for correctness.
+- Store coordination state in the collaboration folder, not in an agent-specific
+  memory system.
+- Treat each participant as an implementation of the same protocol, regardless
+  of vendor or runtime.
+- When an agent cannot run the bundled script, manually create the same files
+  and append the same JSONL events.
 
 ## Files
 
@@ -131,14 +153,16 @@ to a `Decisions` section or `decisions.md`.
 
 ## Watcher Pattern
 
-If using a subagent or background watcher, keep it dumb:
+If using a subagent, background task, shell loop, IDE task, or runtime-specific
+watcher, keep it dumb:
 
 - It watches `state.log` for new lines.
 - It notifies the main agent when a relevant `from != participant_id` event appears.
 - It does not analyze the proposal or write opinions.
 
 The main agent reads `discussion.md`, writes `opinions.md`, and appends state
-events. This keeps judgment in the main conversation context.
+events. This keeps judgment in the main conversation context while the protocol
+state remains portable.
 
 ## Completion
 
