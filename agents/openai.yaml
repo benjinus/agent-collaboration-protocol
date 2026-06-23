@@ -1,0 +1,4 @@
+interface:
+  display_name: "File Collaboration Protocol"
+  short_description: "Coordinate agents through a shared folder"
+  default_prompt: "Set up or participate in a file-based collaboration protocol. Ask me for the collaboration folder, objective, and completion conditions if they are not provided."
