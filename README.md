@@ -1,31 +1,115 @@
 # Agent Collaboration Protocol
 
-A reusable file-based collaboration protocol for AI agents that cannot directly
-message each other.
+A vendor-neutral file protocol for AI agents that need to collaborate through a
+shared filesystem instead of direct messages.
 
-The project is a vendor-neutral agent protocol. Install it as a native skill
-where your agent runtime supports skills, or point any file-capable agent at
-`SKILL.md` and use the protocol files directly.
+The protocol uses a small state machine, structured events, readiness gates, and validator
+checks. Agents must not complete a collaboration only because both sides
+accepted text; they must classify open questions, clear blockers, pass readiness,
+and then complete.
 
-## What It Does
+## What It Creates
 
-The protocol creates a shared workspace folder where agents coordinate through
-plain files:
+An ACP collaboration folder contains:
 
-- `README.md`: objective, participants, rules, and completion conditions.
-- `state.log`: append-only JSONL events.
-- `discussion.md`: shared proposal or design document.
-- `opinions.md`: append-only structured opinions and responses.
+- `protocol.json`: objective, participants, completion gates,
+  and current phase.
+- `events.jsonl`: append-only structured event log. `seq` values must be
+  continuous.
+- `proposal.md`: the current proposal only.
+- `review.md`: structured reviews. Each review heading must use the matching
+  `review_submitted` event seq.
+- `decisions.md`: accepted decisions only.
+- `readiness.md`: open question classification, blockers, deferred
+  nonblocking items, and final implementation readiness.
 
-The important rule is simple: agents use `state.log` to signal changes, read
-`discussion.md` for the current proposal, append their response to `opinions.md`,
-then append another state event when they are waiting for the next participant.
+## Initialize
+
+```bash
+python3 scripts/init_collaboration.py \
+  --folder /path/to/shared-collaboration \
+  --participant server \
+  --participant reader \
+  --objective "Align the reader collaboration architecture" \
+  --completion "Accepted decisions are explicit" \
+  --completion "Readiness passes with no blockers" \
+  --completion "Both participants write completed events"
+```
+
+Initialization uses the current protocol structure:
+
+- Re-running initialization fails when `protocol.json` already exists unless
+  `--resume` is provided.
+- Current protocol folders should use the scripts below instead of hand-writing events.
+
+## Event Workflow
+
+Append events with the portable helper:
+
+```bash
+python3 scripts/append_event.py \
+  --folder /path/to/shared-collaboration \
+  --participant server \
+  --event proposal_submitted \
+  --summary "Initial proposal ready for review" \
+  --doc proposal.md \
+  --reply-to 1
+```
+
+Allowed events:
+
+- `initialized`
+- `proposal_submitted`
+- `review_submitted`
+- `proposal_revised`
+- `question_classified`
+- `decision_proposed`
+- `decision_accepted`
+- `readiness_passed`
+- `completed`
+- `blocked`
+
+Phases:
+
+- `drafting`: proposal is being prepared.
+- `reviewing`: another participant must review.
+- `revising`: proposal owner addresses review.
+- `decision_review`: participants accept explicit decisions.
+- `readiness_check`: questions are classified and blockers cleared.
+- `completed`: collaboration is done.
+- `blocked`: collaboration cannot proceed.
+
+Use `next_action.py` when no runtime-specific watcher exists:
+
+```bash
+python3 scripts/next_action.py \
+  --folder /path/to/shared-collaboration \
+  --participant reader
+```
+
+## Readiness Gate
+
+Before `readiness_passed` or `completed`, `readiness.md` must show:
+
+- Every open question is marked `[resolved]`, `[deferred_nonblocking]`, or
+  `[blocking]`.
+- Every `[deferred_nonblocking]` item includes `Reason: ...`.
+- No `[blocking]` or `[unresolved]` item remains.
+- The checklist item `Ready to implement` is checked.
+
+Validate before passing readiness and before completing:
+
+```bash
+python3 scripts/validate_collaboration.py --folder /path/to/shared-collaboration
+```
+
+Exit codes:
+
+- `0`: valid.
+- `1`: valid with warnings.
+- `2`: invalid.
 
 ## Install for an Agent
-
-Use the same folder for any runtime that can load local instructions and
-read/write files. The protocol state lives in the collaboration folder, not in a
-vendor-specific thread or memory store.
 
 Codex example:
 
@@ -34,63 +118,9 @@ mkdir -p ~/.codex/skills
 cp -R agent-collaboration-protocol ~/.codex/skills/agent-collaboration-protocol
 ```
 
-For Claude Code, OpenCode, Kiro, or other assistants, install this folder in the
-runtime's local instruction or skill location, or tell the agent:
-
-```text
-Use the Agent Collaboration Protocol from /path/to/agent-collaboration-protocol/SKILL.md.
-```
-
-See `references/open-agent-installation.md` for portable installation patterns.
-
-## Initialize a Collaboration Folder
-
-```bash
-python3 scripts/init_collaboration.py \
-  --folder /path/to/shared-collaboration \
-  --participant server \
-  --objective "Align the reader collaboration architecture" \
-  --completion "A shared proposal is accepted by both sides" \
-  --completion "Both participants write completed events"
-```
-
-The script refuses to start without an objective and at least one completion
-condition. This is intentional: participants need to know when to stop.
-
-## State Log Example
-
-Each line in `state.log` is one compact JSON event:
-
-```json
-{"seq":1,"from":"server","event":"collaboration-started","at":"2026-06-23T10:00:00Z","summary":"Collaboration workspace initialized","doc":"discussion.md"}
-{"seq":2,"from":"reader","event":"proposal-updated","at":"2026-06-23T10:05:00Z","summary":"Reader endpoint proposal added","doc":"discussion.md"}
-{"seq":3,"from":"server","event":"opinion-written","at":"2026-06-23T10:08:00Z","summary":"Server concerns added","doc":"opinions.md","reply_to":2}
-```
-
-Agents should process only events where `from` is not their own participant id.
-
-## Opinion Format
-
-Append entries to `opinions.md` in this format:
-
-```markdown
-## 2026-06-23T10:08:00Z - server - seq 3
-
-Context:
-- Read `discussion.md` after reader event seq 2.
-
-Position:
-- ...
-
-Concerns:
-- ...
-
-Suggested Changes:
-- ...
-
-Open Questions:
-- ...
-```
+For Claude Code, OpenCode, Kiro, or another file-capable assistant, install this
+folder in that runtime's local skill or instruction area, or point the agent at
+`SKILL.md`.
 
 ## Project Layout
 
@@ -99,8 +129,14 @@ Open Questions:
 ├── SKILL.md
 ├── agents/openai.yaml
 ├── references/open-agent-installation.md
-├── scripts/init_collaboration.py
-└── README.md
+├── scripts/
+│   ├── _acp.py
+│   ├── append_event.py
+│   ├── init_collaboration.py
+│   ├── next_action.py
+│   └── validate_collaboration.py
+└── tests/
+    └── test_collaboration_scripts.py
 ```
 
 ## License

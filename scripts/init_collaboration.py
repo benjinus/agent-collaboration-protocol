@@ -1,118 +1,106 @@
 #!/usr/bin/env python3
 import argparse
-import datetime as dt
 import json
 from pathlib import Path
 
-
-def utc_now() -> str:
-    return dt.datetime.now(dt.UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+from _acp import append_jsonl, utc_now
 
 
-def next_seq(state_path: Path) -> int:
-    if not state_path.exists():
-        return 1
-    seq = 0
-    for line in state_path.read_text(encoding="utf-8").splitlines():
-        line = line.strip()
-        if not line:
-            continue
-        try:
-            payload = json.loads(line)
-        except json.JSONDecodeError:
-            continue
-        value = payload.get("seq")
-        if isinstance(value, int) and value > seq:
-            seq = value
-    return seq + 1
-
-
-def append_state(state_path: Path, participant: str, event: str, summary: str, doc: str | None = None) -> int:
-    seq = next_seq(state_path)
-    payload = {
-        "seq": seq,
-        "from": participant,
-        "event": event,
-        "at": utc_now(),
-        "summary": summary,
-    }
-    if doc:
-        payload["doc"] = doc
-    with state_path.open("a", encoding="utf-8") as handle:
-        handle.write(json.dumps(payload, ensure_ascii=False, separators=(",", ":")) + "\n")
-    return seq
-
-
-def write_if_missing(path: Path, content: str) -> None:
-    if path.exists():
-        return
+def write_text(path: Path, content: str) -> None:
     path.write_text(content, encoding="utf-8")
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Initialize a vendor-neutral file collaboration folder.")
+    parser = argparse.ArgumentParser(description="Initialize an Agent Collaboration Protocol folder.")
     parser.add_argument("--folder", required=True, help="Shared collaboration folder")
-    parser.add_argument("--participant", required=True, help="Current participant id")
+    parser.add_argument(
+        "--participant",
+        action="append",
+        required=True,
+        help="Participant id; repeat to list all participants. The first participant initializes the workspace.",
+    )
     parser.add_argument("--objective", required=True, help="Collaboration objective")
     parser.add_argument(
         "--completion",
         action="append",
         required=True,
-        help="Completion condition; repeat for multiple conditions",
+        help="Completion gate; repeat for multiple gates",
     )
+    parser.add_argument("--resume", action="store_true", help="Return successfully if a collaboration folder already exists")
     args = parser.parse_args()
 
-    completions = [item.strip() for item in args.completion if item.strip()]
-    if not args.objective.strip():
+    objective = args.objective.strip()
+    participants = []
+    for value in args.participant:
+        item = value.strip()
+        if item and item not in participants:
+            participants.append(item)
+    completion_gates = [item.strip() for item in args.completion if item.strip()]
+    if not objective:
         parser.error("--objective must not be blank")
-    if not completions:
+    if not participants:
+        parser.error("at least one non-blank --participant is required")
+    if not completion_gates:
         parser.error("at least one non-blank --completion is required")
 
     folder = Path(args.folder).expanduser().resolve()
+    protocol_path = folder / "protocol.json"
+    if protocol_path.exists():
+        if args.resume:
+            print(f"Collaboration folder already exists: {folder}")
+            return 0
+        parser.error("collaboration folder already contains protocol.json; use --resume to acknowledge it")
+
     folder.mkdir(parents=True, exist_ok=True)
+    now = utc_now()
+    protocol = {
+        "objective": objective,
+        "participants": [{"id": item} for item in participants],
+        "completionGates": completion_gates,
+        "currentPhase": "drafting",
+        "createdAt": now,
+        "updatedAt": now,
+    }
+    protocol_path.write_text(json.dumps(protocol, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
-    readme = folder / "README.md"
-    state = folder / "state.log"
-    discussion = folder / "discussion.md"
-    opinions = folder / "opinions.md"
-
-    completion_lines = "\n".join(f"- {item}" for item in completions)
-    write_if_missing(
-        readme,
-        f"""# File Collaboration Workspace
+    gates = "\n".join(f"- {item}" for item in completion_gates)
+    gate_checks = "\n".join(f"- [ ] {item}" for item in completion_gates)
+    participant_lines = "\n".join(f"- `{item}`" for item in participants)
+    write_text(
+        folder / "README.md",
+        f"""# Agent Collaboration Workspace
 
 Objective:
-{args.objective.strip()}
+{objective}
 
-Completion Conditions:
-{completion_lines}
+Participants:
+{participant_lines}
 
-Files:
-- `state.log`: append-only JSONL events.
-- `discussion.md`: shared proposal/design document.
-- `opinions.md`: append-only participant opinions.
+Completion Gates:
+{gates}
+
+Protocol Files:
+- `protocol.json`: objective, participants, completion gates, and current phase.
+- `events.jsonl`: append-only structured events with continuous `seq` values.
+- `proposal.md`: current proposal only.
+- `review.md`: structured participant reviews. Review headings must use the matching `review_submitted` event seq.
+- `decisions.md`: accepted decisions only.
+- `readiness.md`: question classification, blockers, deferred nonblocking items, and implementation readiness.
 
 Rules:
-- Append state events; do not edit previous state lines.
-- Process only events from other participants.
-- Write opinions in the agreed structured format.
-- Stop when a completion condition is met and a `completed` event is written.
-
-Compatibility:
-- This workspace is vendor-neutral and can be used by Codex, Claude Code,
-  OpenCode, Kiro, shell scripts, IDE tasks, or any agent that can read/write
-  these files.
-- Participant identity is the `from` field in `state.log`, not a vendor account.
+- Use `scripts/append_event.py` or exactly reproduce its event behavior.
+- Use `scripts/next_action.py` to poll for the next portable action when no runtime watcher exists.
+- Run `scripts/validate_collaboration.py --folder <folder>` before `readiness_passed` and before `completed`.
+- Do not complete until readiness has passed and every completion gate is satisfied.
 """,
     )
-
-    write_if_missing(
-        discussion,
-        f"""# Discussion
+    write_text(
+        folder / "proposal.md",
+        f"""# Proposal
 
 ## Purpose
 
-{args.objective.strip()}
+{objective}
 
 ## Current Proposal
 
@@ -135,24 +123,95 @@ TBD.
 - TBD.
 """,
     )
+    write_text(
+        folder / "review.md",
+        """# Review
 
-    write_if_missing(
-        opinions,
-        """# Opinions
+Append one structured review per `review_submitted` event.
 
-Append one structured entry per response. Do not rewrite older entries.
+Heading rule:
+`## <ISO-8601 UTC> - <participant_id> - seq <review_submitted event seq>`
+
+Template:
+
+## <timestamp> - <participant_id> - seq <event seq>
+
+Context:
+- Read `proposal.md` after event seq `<seq>`.
+
+Position:
+- ...
+
+Concerns:
+- ...
+
+Required Changes:
+- ...
+
+Questions:
+- ...
 """,
     )
+    write_text(
+        folder / "decisions.md",
+        """# Decisions
 
-    seq = append_state(
-        state,
-        args.participant,
-        "collaboration-started",
-        "Collaboration workspace initialized",
-        "discussion.md",
+Only record accepted decisions here. Do not mix unresolved parameters into this file.
+
+## Accepted Decisions
+
+- TBD.
+""",
     )
-    print(f"Initialized collaboration folder: {folder}")
-    print(f"state seq: {seq}")
+    write_text(
+        folder / "readiness.md",
+        """# Readiness
+
+Classify every open question before readiness can pass.
+
+## Open Question Classification
+
+- [unresolved] TBD.
+
+Allowed statuses:
+- `[resolved]`
+- `[deferred_nonblocking]` with `Reason: ...`
+- `[blocking]`
+
+## Blocking Issues
+
+- None.
+
+## Deferred Follow-ups
+
+- None.
+
+## Completion Gates
+
+{gate_checks}
+
+## Final Design Document Checklist
+
+- [ ] Accepted Decisions
+- [ ] Assumptions
+- [ ] Deferred Follow-ups
+- [ ] Implementation Blockers
+- [ ] Ready to implement
+""",
+    )
+    append_jsonl(
+        folder / "events.jsonl",
+        {
+            "seq": 1,
+            "from": participants[0],
+            "event": "initialized",
+            "at": now,
+            "summary": "Collaboration workspace initialized",
+            "doc": "protocol.json",
+        },
+    )
+    print(f"Initialized ACP collaboration folder: {folder}")
+    print("state seq: 1")
     return 0
 
 

@@ -1,61 +1,46 @@
 ---
 name: agent-collaboration-protocol
-description: Use when coordinating multiple AI agents, coding assistants, teams, repos, or users through a vendor-neutral shared filesystem protocol. Works across Codex, Claude Code, OpenCode, Kiro, and other agents that can read/write local files. Supports asynchronous plan discussion, handoff, proposal review, cross-agent negotiation, status signaling, and explicit collaboration exit conditions. Requires a collaboration folder plus a stated objective and completion conditions before starting.
+description: Use when coordinating multiple AI agents, coding assistants, teams, repos, or users through a vendor-neutral shared filesystem protocol. Uses protocol.json, events.jsonl, proposal.md, review.md, decisions.md, readiness.md, strict phases, readiness gates, and validator checks. Requires a collaboration folder, participants, objective, and completion gates before starting.
 ---
 
 # Agent Collaboration Protocol
 
-Use a shared folder as a small coordination bus for agents that cannot directly
-message each other. This is an open file protocol, not a Codex-only workflow.
-Any agent may participate if it can read Markdown, append JSONL, and write files.
-The protocol is append-only except for the shared discussion document, which may
-be edited by participants.
+Use a shared folder as a portable coordination bus for agents that cannot
+directly message each other. ACP is a breaking protocol: it is a state
+machine with structured events and readiness gates, not a loose Markdown
+conversation.
 
-If installing this for another agent runtime, read
-`references/open-agent-installation.md`. The protocol files and script remain
-the same across Codex, Claude Code, OpenCode, Kiro, and similar tools; only the
-runtime's skill/custom-instruction packaging differs.
+Any compatible agent must be able to read Markdown and JSON, write Markdown,
+append JSONL events, and run or exactly reproduce the bundled script behavior.
+Do not rely on Codex thread APIs, Claude-specific hooks, OpenCode-only state,
+Kiro-only metadata, or hidden conversation memory for correctness.
 
 ## Required Inputs
 
-Before starting a collaboration, require:
+Before starting, require:
 
-- `collaboration_folder`: an absolute or repo-relative folder path shared by all participants.
-- `objective`: what the collaboration is trying to decide or produce.
-- `completion_conditions`: concrete conditions for ending the collaboration.
-- `participant_id`: the current agent identity, such as `server`, `reader`, `frontend`, `reviewer`, or `agent-a`.
+- `collaboration_folder`: absolute or repo-relative shared folder path.
+- `objective`: what the collaboration must decide or produce.
+- `completion_gates`: concrete gates for ending collaboration.
+- `participants`: all participant ids, such as `server`, `reader`, `reviewer`,
+  or `agent-a`.
+- `participant_id`: the current agent identity.
 
 If any required input is missing, ask for it before creating files or writing
-state. Do not invent completion conditions.
-
-## Portability Requirements
-
-Keep every implementation platform-neutral:
-
-- Use only shared filesystem operations: create folder, read file, append line,
-  write Markdown, and optionally tail/watch a file.
-- Do not rely on Codex thread APIs, Claude-specific hooks, OpenCode-only state,
-  Kiro-only task metadata, or hidden conversation state for correctness.
-- Store coordination state in the collaboration folder, not in an agent-specific
-  memory system.
-- Treat each participant as an implementation of the same protocol, regardless
-  of vendor or runtime.
-- When an agent cannot run the bundled script, manually create the same files
-  and append the same JSONL events.
+events. Do not invent completion gates.
 
 ## Files
 
-Create or use these files in the collaboration folder:
+ACP folders use these files:
 
-- `README.md`: purpose, participants, file contract, completion conditions.
-- `state.log`: append-only JSONL state events.
-- `discussion.md`: shared proposal/design document.
-- `opinions.md`: append-only structured opinions and responses.
-
-Optional files:
-
-- `decisions.md`: durable accepted decisions if the collaboration becomes long.
-- `archive/`: completed rounds or older drafts.
+- `protocol.json`: objective, participants, completion gates,
+  current phase, and timestamps.
+- `events.jsonl`: append-only event log. Each line is one compact JSON object.
+- `proposal.md`: current proposal only.
+- `review.md`: structured participant reviews.
+- `decisions.md`: accepted decisions only.
+- `readiness.md`: open question classification, blockers, deferred
+  nonblocking items, and implementation readiness.
 
 ## Initialization
 
@@ -65,61 +50,78 @@ Prefer the bundled script:
 python3 <skill>/scripts/init_collaboration.py \
   --folder <collaboration_folder> \
   --participant <participant_id> \
+  --participant <other_participant_id> \
   --objective "<objective>" \
-  --completion "<completion condition>" \
-  --completion "<another condition>"
+  --completion "<completion gate>" \
+  --completion "<another gate>"
 ```
 
-The script is idempotent: it creates missing files and appends a
-`collaboration-started` event. It refuses to start without objective and at
-least one completion condition.
+The initializer fails if `protocol.json` already exists unless `--resume` is
+provided. Repeated initialization is not an append operation.
 
-## State Log Protocol
+## Events
 
-`state.log` is JSONL. Append one compact JSON object per line. Never edit or
-delete previous lines.
+Use `scripts/append_event.py` or exactly reproduce its behavior. Do not hand
+write events unless the runtime cannot execute scripts.
 
-Required fields:
+Required event fields:
 
-- `seq`: monotonically increasing integer in that file.
-- `from`: participant id.
-- `event`: event name.
+- `seq`: continuous integer in `events.jsonl`.
+- `from`: participant id listed in `protocol.json`.
+- `event`: allowed event name.
 - `at`: ISO-8601 UTC timestamp.
+- `summary`: one short sentence.
 
 Recommended fields:
 
 - `doc`: path relative to collaboration folder.
-- `summary`: one short sentence.
-- `reply_to`: prior `seq` when responding to an event.
+- `reply_to`: earlier event `seq`.
 
-Allowed event names:
+Allowed events:
 
-- `collaboration-started`
-- `proposal-updated`
-- `opinion-written`
-- `decision-proposed`
-- `decision-accepted`
-- `question-raised`
-- `blocked`
-- `waiting`
+- `initialized`
+- `proposal_submitted`
+- `review_submitted`
+- `proposal_revised`
+- `question_classified`
+- `decision_proposed`
+- `decision_accepted`
+- `readiness_passed`
 - `completed`
+- `blocked`
 
-Processing rule:
+All responses must use `reply_to` when they are responding to a prior event.
+`reply_to` must point to an earlier existing event.
 
-- Process only events where `from != participant_id`.
-- Track the last processed `seq`.
-- Ignore duplicate or already processed events.
-- After writing an opinion, append `opinion-written`, then append `waiting`.
+## Phases
 
-## Opinion Format
+Agents must act according to `protocol.json.currentPhase`:
 
-Append to `opinions.md` using this exact shape:
+- `drafting`: proposal owner updates `proposal.md`, then appends
+  `proposal_submitted`.
+- `reviewing`: another participant appends a structured review to `review.md`,
+  then appends `review_submitted`.
+- `revising`: proposal owner addresses required changes and appends
+  `proposal_revised`.
+- `decision_review`: participants accept explicit decisions in `decisions.md`
+  by appending `decision_accepted`.
+- `readiness_check`: participants classify every question, clear blockers, and
+  pass readiness.
+- `completed`: stop unless the user explicitly starts a new round.
+- `blocked`: stop until the blocker is resolved.
+
+`completed` is valid only after a prior `readiness_passed` event.
+
+## Review Format
+
+Every `review_submitted` event must have a matching `review.md` heading whose
+seq equals that event's `seq`:
 
 ```markdown
-## <ISO-8601 UTC> - <participant_id> - seq <state_seq>
+## <ISO-8601 UTC> - <participant_id> - seq <review_submitted event seq>
 
 Context:
-- Read `<discussion.md>` after `<other participant>` event seq `<seq>`.
+- Read `proposal.md` after event seq `<seq>`.
 
 Position:
 - ...
@@ -127,49 +129,68 @@ Position:
 Concerns:
 - ...
 
-Suggested Changes:
+Required Changes:
 - ...
 
-Open Questions:
+Questions:
 - ...
 ```
 
-Keep each section. Write `- None.` if a section has no content. Do not rewrite
-another participant's opinion.
+Do not use the replied-to event seq in the review heading. Put replied-to
+context in `Context` and `reply_to`.
 
-## Shared Discussion Document
+## Readiness Gate
 
-Use `discussion.md` for the current proposal. Keep it easy to merge:
+Before `readiness_passed` or `completed`:
 
-- Purpose
-- Current Proposal
-- Message/API Contracts
-- Operational Concerns
-- Open Questions
-- Proposed Decisions
+- Every open question must be classified as `[resolved]`,
+  `[deferred_nonblocking]`, or `[blocking]`.
+- Every `[deferred_nonblocking]` item must include `Reason: ...`.
+- No `[blocking]` or `[unresolved]` item may remain.
+- The final design checklist must include and check `Ready to implement`.
+- `validate_collaboration.py` must pass.
 
-Do not hide unresolved disagreement by editing it away. Move accepted decisions
-to a `Decisions` section or `decisions.md`.
+Blocking readiness items also prevent `decision_accepted`.
 
-## Watcher Pattern
+Final design documents must separate:
 
-If using a subagent, background task, shell loop, IDE task, or runtime-specific
-watcher, keep it dumb:
+- Accepted Decisions
+- Assumptions
+- Deferred Follow-ups
+- Implementation Blockers
+- Ready to Implement
 
-- It watches `state.log` for new lines.
-- It notifies the main agent when a relevant `from != participant_id` event appears.
-- It does not analyze the proposal or write opinions.
+## Polling And Watchers
 
-The main agent reads `discussion.md`, writes `opinions.md`, and appends state
-events. This keeps judgment in the main conversation context while the protocol
-state remains portable.
+If the runtime has a watcher, it may notify the main agent when `events.jsonl`
+changes. The watcher must stay dumb: it only notices new events and never writes
+analysis or decisions.
 
-## Completion
+If there is no watcher, use:
 
-End collaboration only when a completion condition is met. Append:
-
-```json
-{"seq":N,"from":"<participant_id>","event":"completed","at":"<UTC>","summary":"<condition met>"}
+```bash
+python3 <skill>/scripts/next_action.py \
+  --folder <collaboration_folder> \
+  --participant <participant_id>
 ```
 
-Then stop watching unless the user explicitly asks to reopen the collaboration.
+Manual user prompts such as "check the new opinion" are a fallback only, not
+the intended collaboration loop.
+
+## Validation
+
+Run:
+
+```bash
+python3 <skill>/scripts/validate_collaboration.py --folder <collaboration_folder>
+```
+
+The validator checks required files, event shape, seq
+continuity, phase transitions, `reply_to`, review heading seqs, readiness
+classification, and completion ordering.
+
+Exit codes:
+
+- `0`: valid.
+- `1`: valid with warnings.
+- `2`: invalid.
