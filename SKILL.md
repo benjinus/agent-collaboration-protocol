@@ -205,9 +205,15 @@ collaboration is blocked, but it is not completable.
 
 ## Polling And Watchers
 
-If the runtime has a watcher, it may notify the main agent when `events.jsonl`
-changes. The watcher must stay dumb: it only notices new events and never writes
-analysis or decisions.
+Participants must stay alive for the collaboration loop until the phase is
+`completed`, `blocked`, or an explicit user/coordinator deadline is reached.
+Do not stop merely because you appended one valid event. After every action,
+read `protocol.json` again and either take the next allowed action or wait for
+the next event.
+
+If the runtime has a watcher, it may notify the participant when `events.jsonl`
+or `protocol.json` changes. The watcher must stay dumb: it only notices changes
+and never writes analysis or decisions.
 
 If there is no watcher, use:
 
@@ -217,8 +223,26 @@ python3 <skill>/scripts/next_action.py \
   --participant <participant_id>
 ```
 
-Manual user prompts such as "check the new opinion" are a fallback only, not
-the intended collaboration loop.
+For autonomous participants, prefer the blocking helper:
+
+```bash
+python3 <skill>/scripts/wait_for_turn.py \
+  --folder <collaboration_folder> \
+  --participant <participant_id>
+```
+
+`wait_for_turn.py` returns when the participant is listed in `waitingFor`, or
+when the collaboration becomes `completed` or `blocked`. It defaults to a
+30-minute timeout to avoid permanently stuck participant processes; use
+`--timeout 0` only when an external supervisor owns cancellation. On return,
+inspect `next_action.py`, act if it is your turn, append the required event, and
+repeat the wait/action loop. Manual user prompts such as "check the new opinion"
+are a fallback only, not the intended collaboration loop.
+
+Coordinator prompts that launch participants should ask each participant to run
+this loop instead of doing one phase and exiting. A participant that is not
+listed in `waitingFor` may block in `wait_for_turn.py`, but must not edit shared
+state while waiting.
 
 ## Validation
 

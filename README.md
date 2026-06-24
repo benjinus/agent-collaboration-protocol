@@ -13,6 +13,11 @@ initiator waits; only the listed reviewer can advance the review phase. The
 initiator may poll or block on timeout, but must not keep editing shared
 documents while the review is pending.
 
+Participants are expected to run a collaboration loop, not a single step. After
+appending an event, a participant reads `protocol.json` again and either acts on
+the next allowed phase or waits until `events.jsonl`/`protocol.json` changes.
+This prevents a coordinator from having to send a new prompt after every phase.
+
 ## Install for an Agent
 
 Preferred install:
@@ -105,6 +110,34 @@ Phases:
 - `readiness_check`: questions are classified and blockers cleared.
 - `completed`: collaboration is done.
 - `blocked`: collaboration cannot proceed.
+
+## Participant Run Loop
+
+When no native watcher exists, each participant should use the portable wait
+helper:
+
+```bash
+python3 scripts/wait_for_turn.py \
+  --folder <collaboration-folder> \
+  --participant <participant-id>
+```
+
+It blocks until the participant is listed in `protocol.json.waitingFor`, or the
+collaboration reaches `completed`/`blocked`. The default timeout is 30 minutes
+so inactive collaborations do not leave participant processes waiting forever;
+pass `--timeout 0` only when an external supervisor owns cancellation. When it
+returns, run or inspect:
+
+```bash
+python3 scripts/next_action.py \
+  --folder <collaboration-folder> \
+  --participant <participant-id>
+```
+
+Then perform only the allowed action, append the event with
+`scripts/append_event.py`, and loop back to `wait_for_turn.py`. Do not exit after
+one valid event unless the phase is terminal or an explicit coordinator deadline
+was reached.
 
 ## Readiness Gate
 

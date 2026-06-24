@@ -10,6 +10,7 @@ ROOT = Path(__file__).resolve().parents[1]
 INIT = ROOT / "scripts" / "init_collaboration.py"
 APPEND = ROOT / "scripts" / "append_event.py"
 VALIDATE = ROOT / "scripts" / "validate_collaboration.py"
+WAIT = ROOT / "scripts" / "wait_for_turn.py"
 
 
 def run_script(*args: str, cwd: Path | None = None) -> subprocess.CompletedProcess[str]:
@@ -443,6 +444,93 @@ Context:
             self.assertEqual(action.returncode, 0, action.stderr)
             self.assertIn("wait for the listed reviewer", action.stdout)
             self.assertIn("do not edit proposal.md", action.stdout)
+
+    def test_wait_for_turn_returns_when_participant_is_waiting(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            folder = Path(tmp) / "collab"
+            self.assertEqual(self.init_folder(folder).returncode, 0)
+
+            result = run_script(
+                WAIT,
+                "--folder",
+                folder,
+                "--participant",
+                "server",
+                "--timeout",
+                "1",
+                "--interval",
+                "0.1",
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("ready: server is listed in waitingFor", result.stdout)
+            self.assertIn("next action: update proposal.md", result.stdout)
+
+    def test_wait_for_turn_documents_default_timeout(self) -> None:
+        result = run_script(WAIT, "--help")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("defaults to 1800 seconds", result.stdout)
+        self.assertIn("0 for no timeout", result.stdout)
+
+    def test_wait_for_turn_times_out_when_participant_is_not_waiting(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            folder = Path(tmp) / "collab"
+            self.assertEqual(self.init_folder(folder).returncode, 0)
+            self.assertEqual(self.append(folder, "server", "proposal_submitted", "proposal ready", "proposal.md", 1).returncode, 0)
+
+            result = run_script(
+                WAIT,
+                "--folder",
+                folder,
+                "--participant",
+                "server",
+                "--timeout",
+                "0.2",
+                "--interval",
+                "0.1",
+            )
+            self.assertEqual(result.returncode, 1)
+            self.assertIn("waiting for reader", result.stdout)
+            self.assertIn("timeout: waiting for reader", result.stderr)
+
+    def test_wait_for_turn_returns_on_completed_phase(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            folder = Path(tmp) / "collab"
+            self.assertEqual(self.init_folder(folder).returncode, 0)
+            self.write_valid_readiness(folder)
+            self.write_valid_conclusion(folder)
+            self.assertEqual(self.append(folder, "server", "proposal_submitted", "proposal ready", "proposal.md", 1).returncode, 0)
+            self.assertEqual(self.append(folder, "reader", "review_submitted", "review ready", "review.md", 2).returncode, 0)
+            (folder / "review.md").write_text(
+                """# Review
+
+## 2026-01-01T00:00:00Z - reader - seq 3
+
+Context:
+- Read proposal.
+""",
+                encoding="utf-8",
+            )
+            self.assertEqual(self.append(folder, "server", "proposal_revised", "proposal revised", "proposal.md", 3).returncode, 0)
+            self.assertEqual(self.append(folder, "server", "question_classified", "questions classified", "readiness.md", 4).returncode, 0)
+            self.assertEqual(self.append(folder, "server", "decision_accepted", "server accepts", "decisions.md", 5).returncode, 0)
+            self.assertEqual(self.append(folder, "reader", "decision_accepted", "reader accepts", "decisions.md", 6).returncode, 0)
+            self.assertEqual(self.append(folder, "server", "readiness_passed", "ready", "readiness.md", 7).returncode, 0)
+            self.assertEqual(self.append(folder, "server", "completed", "done", "conclusion.md", 8).returncode, 0)
+
+            result = run_script(
+                WAIT,
+                "--folder",
+                folder,
+                "--participant",
+                "reader",
+                "--timeout",
+                "1",
+                "--interval",
+                "0.1",
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("ready: phase is completed", result.stdout)
+            self.assertIn("next action: stop; collaboration is complete", result.stdout)
 
     def test_validator_rejects_obsolete_files_and_completion_gate_references(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
