@@ -6,7 +6,7 @@ shared filesystem instead of direct messages.
 The protocol uses a small state machine, structured events, readiness gates, and
 validator checks. Agents must not complete a collaboration only because both
 sides accepted text; they must classify open questions, clear blockers, pass
-readiness, and then complete.
+readiness, write a final conclusion, and then complete.
 
 The protocol is turn-owned. After the initiator submits a proposal, the
 initiator waits; only the listed reviewer can advance the review phase. The
@@ -46,6 +46,9 @@ An ACP collaboration folder contains:
 - `decisions.md`: accepted decisions only.
 - `readiness.md`: open question classification, blockers, deferred
   nonblocking items, and final implementation readiness.
+- `conclusion.md`: the final answer to the collaboration objective: whether to
+  proceed, not proceed, or defer; why; how to implement or why not; and the next
+  action.
 
 No extra state files are part of the protocol. Keep one source of truth for
 collaboration state.
@@ -116,6 +119,13 @@ Before `readiness_passed` or `completed`, `readiness.md` must show:
 The same question classification must happen before participants accept
 decisions. Acceptance is not valid while unresolved or blocking questions
 remain.
+
+## Final Conclusion
+
+After readiness passes, the collaboration must produce `conclusion.md`. It is
+the decision document a user can act on: do the feature, do not do it, or defer
+it; the rationale; accepted decisions; implementation approach; assumptions;
+follow-ups; blockers; and the next action.
 
 ## License
 

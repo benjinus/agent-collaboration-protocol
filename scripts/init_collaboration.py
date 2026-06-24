@@ -88,6 +88,7 @@ Protocol Files:
 - `review.md`: structured participant reviews. Review headings must use the matching `review_submitted` event seq.
 - `decisions.md`: accepted decisions only.
 - `readiness.md`: question classification, blockers, deferred nonblocking items, and implementation readiness.
+- `conclusion.md`: final discussion conclusion that states the outcome, rationale, implementation approach, and next action.
 
 Rules:
 - Use `scripts/append_event.py` or exactly reproduce its event behavior.
@@ -96,6 +97,7 @@ Rules:
 - Respect `protocol.json.waitingFor`: only listed participants may advance the current phase.
 - After `proposal_submitted`, the proposal owner must wait until all reviewers listed in `waitingFor` submit reviews or block.
 - Do not complete until readiness has passed and every completion gate is satisfied.
+- `completed` must reference `conclusion.md`; do not finish with only accepted decision fragments.
 """,
     )
     write_text(
@@ -201,6 +203,52 @@ Allowed statuses:
 - [ ] Deferred Follow-ups
 - [ ] Implementation Blockers
 - [ ] Ready to implement
+""",
+    )
+    write_text(
+        folder / "conclusion.md",
+        f"""# Conclusion
+
+This file is the final outcome of the collaboration, not a transcript.
+Complete it after decisions are accepted and readiness passes.
+
+## Decision Outcome
+
+- [blocked] TBD
+
+Allowed final outcomes:
+- `[proceed]` implement now.
+- `[do_not_proceed]` do not implement.
+- `[defer]` defer until named follow-ups are resolved.
+- `[blocked]` cannot complete.
+
+## Rationale
+
+TBD.
+
+## Accepted Decisions
+
+- TBD.
+
+## Implementation Approach
+
+TBD.
+
+## Assumptions
+
+- TBD.
+
+## Deferred Follow-ups
+
+- TBD.
+
+## Implementation Blockers
+
+- TBD.
+
+## Next Action
+
+TBD.
 """,
     )
     append_jsonl(

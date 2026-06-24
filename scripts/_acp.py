@@ -35,6 +35,7 @@ REQUIRED_FILES = [
     "review.md",
     "decisions.md",
     "readiness.md",
+    "conclusion.md",
 ]
 
 FORBIDDEN_FILES = [
@@ -44,6 +45,19 @@ FORBIDDEN_FILES = [
 ]
 
 FORBIDDEN_PROTOCOL_REFERENCES = set(FORBIDDEN_FILES)
+
+CONCLUSION_REQUIRED_HEADINGS = [
+    "Decision Outcome",
+    "Rationale",
+    "Accepted Decisions",
+    "Implementation Approach",
+    "Assumptions",
+    "Deferred Follow-ups",
+    "Implementation Blockers",
+    "Next Action",
+]
+
+CONCLUSION_COMPLETABLE_OUTCOMES = {"proceed", "do_not_proceed", "defer"}
 
 
 class ProtocolError(Exception):
@@ -157,6 +171,43 @@ def readiness_scan(folder: Path) -> dict[str, Any]:
         "ready_to_implement": ready_to_implement,
         "text": text,
     }
+
+
+def conclusion_scan(folder: Path) -> dict[str, Any]:
+    text = (folder / "conclusion.md").read_text(encoding="utf-8") if (folder / "conclusion.md").exists() else ""
+    missing_headings = [
+        heading
+        for heading in CONCLUSION_REQUIRED_HEADINGS
+        if not re.search(r"^##\s+" + re.escape(heading) + r"\s*$", text, flags=re.MULTILINE)
+    ]
+    outcomes = re.findall(r"^\s*-\s*\[([A-Za-z_]+)\]\s+(.+)$", text, flags=re.MULTILINE)
+    final_outcomes = [
+        (status, body)
+        for status, body in outcomes
+        if status in {*CONCLUSION_COMPLETABLE_OUTCOMES, "blocked"}
+    ]
+    placeholders = re.findall(r"\b(?:TBD|TODO|unresolved|待定)\b", text, flags=re.IGNORECASE)
+    return {
+        "missing_headings": missing_headings,
+        "final_outcomes": final_outcomes,
+        "placeholders": placeholders,
+        "text": text,
+    }
+
+
+def validate_conclusion_for_completion(folder: Path) -> list[str]:
+    conclusion = conclusion_scan(folder)
+    errors: list[str] = []
+    if conclusion["missing_headings"]:
+        errors.append("conclusion.md is missing required sections: " + ", ".join(conclusion["missing_headings"]))
+    final_outcomes = conclusion["final_outcomes"]
+    if len(final_outcomes) != 1:
+        errors.append("conclusion.md must declare exactly one final outcome")
+    elif final_outcomes[0][0] not in CONCLUSION_COMPLETABLE_OUTCOMES:
+        errors.append("conclusion.md outcome cannot be completed while blocked")
+    if conclusion["placeholders"]:
+        errors.append("conclusion.md must not contain unresolved placeholders before completed")
+    return errors
 
 
 def missing_completion_gates(protocol: dict[str, Any], readiness_text: str) -> list[str]:
@@ -321,6 +372,8 @@ def derive_state(
         elif name == "completed":
             if phase != "readiness_check" or not readiness_passed:
                 errors.append(f"seq {seq}: completed requires a prior readiness_passed event")
+            if event.get("doc") != "conclusion.md":
+                errors.append(f"seq {seq}: completed must reference conclusion.md")
             if proposal_owner:
                 expect_waiting(event, {proposal_owner}, "completion")
             phase = "completed"
@@ -475,6 +528,7 @@ def validate_folder(folder: Path) -> tuple[list[str], list[str]]:
         missing_gates = missing_completion_gates(protocol, readiness["text"])
         if missing_gates:
             errors.append("completion gates must be checked before completed: " + ", ".join(missing_gates))
+        errors.extend(validate_conclusion_for_completion(folder))
     elif readiness["deferred_missing_reason"]:
         warnings.append("deferred_nonblocking readiness items should include a reason")
     return errors, warnings
@@ -534,9 +588,14 @@ def append_event(
         if not readiness["ready_to_implement"]:
             raise ProtocolError("readiness.md must check 'Ready to implement' first")
     if event_name == "completed":
+        if doc != "conclusion.md":
+            raise ProtocolError("completed must reference conclusion.md")
         missing_gates = missing_completion_gates(protocol, readiness["text"])
         if missing_gates:
             raise ProtocolError("completion gates must be checked first: " + ", ".join(missing_gates))
+        conclusion_errors = validate_conclusion_for_completion(folder)
+        if conclusion_errors:
+            raise ProtocolError("; ".join(conclusion_errors))
     append_jsonl(folder / "events.jsonl", payload)
     if derived_state["currentPhase"]:
         protocol["currentPhase"] = derived_state["currentPhase"]

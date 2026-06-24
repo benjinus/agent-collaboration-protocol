@@ -99,6 +99,45 @@ class CollaborationScriptsTest(unittest.TestCase):
             encoding="utf-8",
         )
 
+    def write_valid_conclusion(self, folder: Path, outcome: str = "proceed") -> None:
+        (folder / "conclusion.md").write_text(
+            f"""# Conclusion
+
+## Decision Outcome
+
+- [{outcome}] Implement the accepted design now.
+
+## Rationale
+
+The accepted decisions answer the collaboration objective and readiness has no blockers.
+
+## Accepted Decisions
+
+- Use the accepted decisions in decisions.md.
+
+## Implementation Approach
+
+Implement according to the accepted decisions.
+
+## Assumptions
+
+- No additional assumptions.
+
+## Deferred Follow-ups
+
+- None.
+
+## Implementation Blockers
+
+- None.
+
+## Next Action
+
+Start implementation.
+""",
+            encoding="utf-8",
+        )
+
     def test_init_creates_protocol_structure_and_rejects_repeat_without_resume(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             folder = Path(tmp) / "collab"
@@ -111,6 +150,7 @@ class CollaborationScriptsTest(unittest.TestCase):
                 "review.md",
                 "decisions.md",
                 "readiness.md",
+                "conclusion.md",
             ]:
                 self.assertTrue((folder / name).exists(), name)
             protocol = json.loads((folder / "protocol.json").read_text(encoding="utf-8"))
@@ -312,9 +352,82 @@ Context:
             self.assertEqual(self.append(folder, "server", "decision_accepted", "server accepts", "decisions.md", 5).returncode, 0)
             self.assertEqual(self.append(folder, "reader", "decision_accepted", "reader accepts", "decisions.md", 6).returncode, 0)
             self.assertEqual(self.append(folder, "server", "readiness_passed", "ready", "readiness.md", 7).returncode, 0)
-            completed = self.append(folder, "server", "completed", "done", "decisions.md", 8)
+            self.write_valid_conclusion(folder)
+            completed = self.append(folder, "server", "completed", "done", "conclusion.md", 8)
             self.assertNotEqual(completed.returncode, 0)
             self.assertIn("completion gates", completed.stderr)
+
+    def test_completed_requires_complete_conclusion_document(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            folder = Path(tmp) / "collab"
+            self.assertEqual(self.init_folder(folder).returncode, 0)
+            self.write_valid_readiness(folder)
+            self.assertEqual(self.append(folder, "server", "proposal_submitted", "proposal ready", "proposal.md", 1).returncode, 0)
+            self.assertEqual(self.append(folder, "reader", "review_submitted", "review ready", "review.md", 2).returncode, 0)
+            (folder / "review.md").write_text(
+                """# Review
+
+## 2026-01-01T00:00:00Z - reader - seq 3
+
+Context:
+- Read proposal.
+""",
+                encoding="utf-8",
+            )
+            self.assertEqual(self.append(folder, "server", "proposal_revised", "proposal revised", "proposal.md", 3).returncode, 0)
+            self.assertEqual(self.append(folder, "server", "question_classified", "questions classified", "readiness.md", 4).returncode, 0)
+            self.assertEqual(self.append(folder, "server", "decision_accepted", "server accepts", "decisions.md", 5).returncode, 0)
+            self.assertEqual(self.append(folder, "reader", "decision_accepted", "reader accepts", "decisions.md", 6).returncode, 0)
+            self.assertEqual(self.append(folder, "server", "readiness_passed", "ready", "readiness.md", 7).returncode, 0)
+
+            wrong_doc = self.append(folder, "server", "completed", "done", "decisions.md", 8)
+            self.assertEqual(wrong_doc.returncode, 2)
+            self.assertIn("completed must reference conclusion.md", wrong_doc.stderr)
+
+            incomplete = self.append(folder, "server", "completed", "done", "conclusion.md", 8)
+            self.assertEqual(incomplete.returncode, 2)
+            self.assertIn("conclusion.md", incomplete.stderr)
+
+            self.write_valid_conclusion(folder)
+            completed = self.append(folder, "server", "completed", "done", "conclusion.md", 8)
+            self.assertEqual(completed.returncode, 0, completed.stderr)
+
+    def test_validator_rejects_completed_with_incomplete_conclusion(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            folder = Path(tmp) / "collab"
+            self.assertEqual(self.init_folder(folder).returncode, 0)
+            self.write_valid_readiness(folder)
+            manual_events = [
+                {"seq": 2, "from": "server", "event": "proposal_submitted", "at": "2026-01-01T00:00:01Z", "summary": "proposal", "reply_to": 1},
+                {"seq": 3, "from": "reader", "event": "review_submitted", "at": "2026-01-01T00:00:02Z", "summary": "review", "reply_to": 2},
+                {"seq": 4, "from": "server", "event": "proposal_revised", "at": "2026-01-01T00:00:03Z", "summary": "revised", "reply_to": 3},
+                {"seq": 5, "from": "server", "event": "question_classified", "at": "2026-01-01T00:00:04Z", "summary": "classified", "reply_to": 4},
+                {"seq": 6, "from": "server", "event": "decision_accepted", "at": "2026-01-01T00:00:05Z", "summary": "server accepts", "reply_to": 5},
+                {"seq": 7, "from": "reader", "event": "decision_accepted", "at": "2026-01-01T00:00:06Z", "summary": "reader accepts", "reply_to": 6},
+                {"seq": 8, "from": "server", "event": "readiness_passed", "at": "2026-01-01T00:00:07Z", "summary": "ready", "reply_to": 7},
+                {"seq": 9, "from": "server", "event": "completed", "at": "2026-01-01T00:00:08Z", "summary": "done", "doc": "conclusion.md", "reply_to": 8},
+            ]
+            with (folder / "events.jsonl").open("a", encoding="utf-8") as handle:
+                for event in manual_events:
+                    handle.write(json.dumps(event, separators=(",", ":")) + "\n")
+            (folder / "review.md").write_text(
+                """# Review
+
+## 2026-01-01T00:00:02Z - reader - seq 3
+
+Context:
+- Read proposal.
+""",
+                encoding="utf-8",
+            )
+            protocol = json.loads((folder / "protocol.json").read_text(encoding="utf-8"))
+            protocol["currentPhase"] = "completed"
+            protocol["waitingFor"] = []
+            (folder / "protocol.json").write_text(json.dumps(protocol, ensure_ascii=False), encoding="utf-8")
+
+            result = run_script(VALIDATE, "--folder", folder)
+            self.assertEqual(result.returncode, 2)
+            self.assertIn("conclusion.md", result.stdout)
 
     def test_proposal_owner_must_wait_during_reviewing(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

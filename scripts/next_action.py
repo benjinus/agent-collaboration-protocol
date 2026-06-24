@@ -2,7 +2,7 @@
 import argparse
 from pathlib import Path
 
-from _acp import ProtocolError, load_protocol, participant_ids, read_events, readiness_scan
+from _acp import ProtocolError, load_protocol, participant_ids, read_events, readiness_scan, validate_conclusion_for_completion
 
 
 def last_event(events: list[dict], event_name: str | None = None) -> dict | None:
@@ -72,8 +72,10 @@ def main() -> int:
             print("next action: complete the final design checklist in readiness.md.")
         elif not any(event.get("event") == "readiness_passed" for event in events):
             print("next action: run validate_collaboration.py, then append readiness_passed.")
+        elif validate_conclusion_for_completion(folder):
+            print("next action: write conclusion.md with the final outcome, rationale, implementation approach, and next action.")
         else:
-            print("next action: generate final document, run validate_collaboration.py, then append completed.")
+            print("next action: run validate_collaboration.py, then append completed with doc=conclusion.md.")
     elif phase == "completed":
         print("next action: stop; collaboration is complete.")
     elif phase == "blocked":

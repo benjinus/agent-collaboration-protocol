@@ -2,7 +2,7 @@
 
 Agent Collaboration Protocol 是一个面向 AI Agent 的、与厂商无关的文件协作协议。它适用于多个 Agent 无法直接互发消息，但可以读写同一个文件夹的场景。
 
-协议通过一个小型状态机、结构化事件、readiness gate 和 validator 检查来约束协作过程。Agent 不能只因为双方“口头接受”就结束协作；必须先分类开放问题、清除阻塞项、通过 readiness，再完成协作。
+协议通过一个小型状态机、结构化事件、readiness gate 和 validator 检查来约束协作过程。Agent 不能只因为双方“口头接受”就结束协作；必须先分类开放问题、清除阻塞项、通过 readiness，写出最终结论，再完成协作。
 
 协议是按轮次交接的。发起方提交方案后必须等待，只有被列入等待列表的评审方可以推进评审阶段。发起方可以轮询或在真实超时/阻塞时标记 blocked，但不能在评审未完成时继续编辑共享文档。
 
@@ -34,6 +34,7 @@ git clone https://github.com/benjinus/agent-collaboration-protocol.git
 - `review.md`：结构化评审意见。每条 review 的标题必须使用对应 `review_submitted` 事件的 seq。
 - `decisions.md`：只记录已经接受的决策。
 - `readiness.md`：开放问题分类、阻塞项、延后但不阻塞的事项，以及最终实施准备状态。
+- `conclusion.md`：对协作目标的最终回答：做、不做、还是延后；原因是什么；如何做或为何不做；下一步是什么。
 
 协议不使用额外状态文件。协作状态只能有一个事实来源。
 
@@ -98,6 +99,10 @@ git clone https://github.com/benjinus/agent-collaboration-protocol.git
 - `Ready to implement` 检查项已经勾选。
 
 同样的问题分类也必须发生在参与方接受决策之前。只要仍有 unresolved 或 blocking 问题，接受决策就是无效的。
+
+## 最终结论
+
+Readiness 通过后，协作必须产出 `conclusion.md`。它是用户可以据此行动的结论文档：这个功能做不做，或者是否延后；原因、已接受决策、实施方式、假设、后续事项、阻塞项和下一步都必须写清楚。
 
 ## License
 

@@ -41,6 +41,9 @@ ACP folders use these files:
 - `decisions.md`: accepted decisions only.
 - `readiness.md`: open question classification, blockers, deferred
   nonblocking items, and implementation readiness.
+- `conclusion.md`: final discussion conclusion. It states whether to proceed,
+  not proceed, defer, or block; why; how to implement or why not; and the next
+  action.
 
 Do not create or use `state.log`, `discussion.md`, or `opinions.md`. They are
 not protocol files and must not appear in completion gates or instructions.
@@ -115,11 +118,14 @@ Agents must act according to `protocol.json.currentPhase` and
   listed in `waitingFor` accept explicit decisions in `decisions.md` by
   appending `decision_accepted`.
 - `readiness_check`: participants classify every question, clear blockers, and
-  pass readiness.
+  pass readiness, then the proposal owner writes `conclusion.md`.
 - `completed`: stop unless the user explicitly starts a new round.
 - `blocked`: stop until the blocker is resolved.
 
 `completed` is valid only after a prior `readiness_passed` event.
+`completed` must reference `conclusion.md`. Do not complete with only
+`decisions.md`; decisions are inputs, while `conclusion.md` is the final answer
+to the collaboration objective.
 
 The proposal owner must wait after `proposal_submitted`. While phase is
 `reviewing`, the owner may poll for the next action or append `blocked` for a
@@ -177,6 +183,26 @@ Final design documents must separate:
 - Implementation Blockers
 - Ready to Implement
 
+## Final Conclusion
+
+Before `completed`, write `conclusion.md` as a conclusion document, not a log.
+It must include:
+
+- Decision Outcome: exactly one of `[proceed]`, `[do_not_proceed]`, or
+  `[defer]`.
+- Rationale.
+- Accepted Decisions.
+- Implementation Approach.
+- Assumptions.
+- Deferred Follow-ups.
+- Implementation Blockers.
+- Next Action.
+
+Use `[proceed]` when implementation should start now, `[do_not_proceed]` when
+the feature or plan should not be done, and `[defer]` when follow-up work must
+happen before implementation. A `[blocked]` outcome may exist while the
+collaboration is blocked, but it is not completable.
+
 ## Polling And Watchers
 
 If the runtime has a watcher, it may notify the main agent when `events.jsonl`
@@ -204,8 +230,8 @@ python3 <skill>/scripts/validate_collaboration.py --folder <collaboration_folder
 
 The validator checks required files, absence of obsolete files, event shape,
 seq continuity, timestamp monotonicity, phase transitions, `waitingFor`
-ownership, `reply_to`, review heading seqs, readiness classification, and
-completion ordering.
+ownership, `reply_to`, review heading seqs, readiness classification,
+conclusion completeness, and completion ordering.
 
 Exit codes:
 
