@@ -1,6 +1,6 @@
 # Agent Collaboration Protocol
 
-![License](https://img.shields.io/github/license/benjinus/agent-collaboration-protocol)
+![License](https://img.shields.io/github/license/agi-connect/agent-collaboration-protocol)
 ![Skill](https://img.shields.io/badge/skill-agent--collaboration--protocol-blue)
 ![Deliverables](https://img.shields.io/badge/deliverables-Markdown-1f6feb)
 ![AI Collaboration](https://img.shields.io/badge/AI-collaboration-7c3aed)
@@ -57,7 +57,7 @@ action.
 The recommended installation method is `npx skills add`:
 
 ```bash
-npx skills add benjinus/agent-collaboration-protocol
+npx skills add agi-connect/agent-collaboration-protocol
 ```
 
 This installs the skill into the local skills directory used by compatible
@@ -66,7 +66,7 @@ agents.
 If your agent does not support `skills add`, clone the repository manually:
 
 ```bash
-git clone https://github.com/benjinus/agent-collaboration-protocol.git
+git clone https://github.com/agi-connect/agent-collaboration-protocol.git
 ```
 
 Then point your agent at the repository's `SKILL.md`, or copy the repository
