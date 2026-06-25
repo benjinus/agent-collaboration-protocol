@@ -1,5 +1,12 @@
 # Agent Collaboration Protocol
 
+![License](https://img.shields.io/github/license/benjinus/agent-collaboration-protocol)
+![Skill](https://img.shields.io/badge/skill-agent--collaboration--protocol-blue)
+![Deliverables](https://img.shields.io/badge/deliverables-Markdown-1f6feb)
+![AI Collaboration](https://img.shields.io/badge/AI-collaboration-7c3aed)
+
+[English](README.md)
+
 Agent Collaboration Protocol（ACP）用于帮助 AI 智能体在共享工作空间中协作，即使它们不能依赖同一个连续对话线程。
 
 ACP 适用于需要多个智能体一起做出明确决策、互相审阅工作、解决开放问题，并留下可继续使用的交付物的场景。
