@@ -1,22 +1,12 @@
 # Agent Collaboration Protocol
 
-A vendor-neutral file protocol for AI agents that need to collaborate through a
-shared filesystem instead of direct messages.
+Agent Collaboration Protocol (ACP) is a vendor-neutral file protocol for AI
+agents that collaborate through a shared filesystem instead of direct messages.
 
-The protocol uses a small state machine, structured events, readiness gates, and
-validator checks. Agents must not complete a collaboration only because both
-sides accepted text; they must classify open questions, clear blockers, pass
-readiness, write a final conclusion, and then complete.
-
-The protocol is turn-owned. After the initiator submits a proposal, the
-initiator waits; only the listed reviewer can advance the review phase. The
-initiator may poll or block on timeout, but must not keep editing shared
-documents while the review is pending.
-
-Participants are expected to run a collaboration loop, not a single step. After
-appending an event, a participant reads `protocol.json` again and either acts on
-the next allowed phase or waits until `events.jsonl`/`protocol.json` changes.
-This prevents a coordinator from having to send a new prompt after every phase.
+ACP schema v2 is deliverable-aware. A completed run must include a declared
+Markdown primary deliverable, deliverable lifecycle events, a SHA-256 freeze
+snapshot, readiness gates, and a final `conclusion.md` receipt. Old
+non-deliverable ACP folders are not supported by this schema.
 
 ## Install for an Agent
 
@@ -26,70 +16,87 @@ Preferred install:
 npx skills add benjinus/agent-collaboration-protocol
 ```
 
-The `skills` CLI detects supported agents and installs the skill into the
-selected agent locations.
-
-Manual fallback when the CLI is not available:
+Manual fallback:
 
 ```bash
 git clone https://github.com/benjinus/agent-collaboration-protocol.git
 ```
 
 Copy the cloned folder into your agent's skill or instruction directory, or
-point the agent at `SKILL.md` inside the cloned repository.
+point the agent at `SKILL.md`.
 
 ## What It Creates
 
-An ACP collaboration folder contains:
+An internal-mode ACP folder contains:
 
-- `protocol.json`: objective, participants, completion gates, and current phase.
-- `events.jsonl`: append-only structured event log. `seq` values must be
-  continuous.
-- `proposal.md`: the current proposal only.
-- `review.md`: structured reviews. Each review heading must use the matching
-  `review_submitted` event seq.
-- `decisions.md`: accepted decisions only.
-- `readiness.md`: open question classification, blockers, deferred
-  nonblocking items, and final implementation readiness.
-- `conclusion.md`: the final answer to the collaboration objective: whether to
-  proceed, not proceed, or defer; why; how to implement or why not; and the next
-  action.
+```text
+<collaboration-folder>/
+├── protocol.json
+├── events.jsonl
+├── proposal.md
+├── review.md
+├── decisions.md
+├── readiness.md
+├── conclusion.md
+└── deliverables/
+    └── <primary>.md
+```
 
-No extra state files are part of the protocol. Keep one source of truth for
-collaboration state.
+Protocol files stay at the collaboration root. Deliverable artifacts live under
+`deliverables/`. `conclusion.md` is the final protocol receipt, not the primary
+deliverable.
 
 ## Start A Collaboration
 
-Use this prompt to start a collaboration from any agent that has this protocol
-installed or can read this repository:
-
-```text
-Use Agent Collaboration Protocol to start a file-based collaboration.
-
-Collaboration folder:
-<absolute-or-repo-relative-folder>
-
-Participants:
-- <participant-a>
-- <participant-b>
-
-Current participant:
-<participant-a>
-
-Objective:
-<one concrete decision or deliverable>
-
-Completion gates:
-- <gate that proves the accepted decisions are explicit>
-- <gate that proves readiness passed with no blockers>
-- <gate that proves every participant completed>
+```bash
+python3 scripts/init_collaboration.py \
+  --folder <collaboration-folder> \
+  --participant <participant-a> \
+  --participant <participant-b> \
+  --objective "<one concrete decision or deliverable>" \
+  --primary-deliverable-type design-spec \
+  --completion "<objective gate>" \
+  --completion "<another objective gate>"
 ```
+
+Built-in primary deliverable types:
+
+- `adr`
+- `design-spec`
+- `implementation-plan`
+- `decision-memo`
+- `review-report`
+- `test-plan`
+
+Use `custom` only with `--primary-deliverable-file` and one or more
+`--primary-deliverable-check` values.
+
+For external deliverables:
+
+```bash
+python3 scripts/init_collaboration.py \
+  --folder <repo>/.acp/<run> \
+  --participant <participant-a> \
+  --participant <participant-b> \
+  --objective "<objective>" \
+  --primary-deliverable-type adr \
+  --deliverables-mode external \
+  --repo-root ../.. \
+  --deliverables-dir docs/architecture \
+  --completion "<objective gate>"
+```
+
+External mode stores artifacts under the repo-root-relative deliverables dir and
+uses `external:<file>` references in events, readiness, and conclusion.
 
 ## Event Workflow
 
 Allowed events:
 
 - `initialized`
+- `deliverable_drafted`
+- `deliverable_revised`
+- `deliverable_frozen`
 - `proposal_submitted`
 - `review_submitted`
 - `proposal_revised`
@@ -100,21 +107,23 @@ Allowed events:
 - `completed`
 - `blocked`
 
-Phases:
+All events after `initialized` require `reply_to`. All `deliverable_*` events
+require `doc` and `role`. `deliverable_frozen` also requires a top-level
+`sha256` field.
 
-- `drafting`: proposal is being prepared.
-- `reviewing`: another participant must review.
-- `revising`: proposal owner addresses review.
-- `decision_review`: open questions are classified, then participants accept
-  explicit decisions.
-- `readiness_check`: questions are classified and blockers cleared.
-- `completed`: collaboration is done.
-- `blocked`: collaboration cannot proceed.
+Phases remain:
+
+- `drafting`
+- `reviewing`
+- `revising`
+- `decision_review`
+- `readiness_check`
+- `completed`
+- `blocked`
 
 ## Participant Run Loop
 
-When no native watcher exists, each participant should use the portable wait
-helper:
+When no native watcher exists:
 
 ```bash
 python3 scripts/wait_for_turn.py \
@@ -122,11 +131,7 @@ python3 scripts/wait_for_turn.py \
   --participant <participant-id>
 ```
 
-It blocks until the participant is listed in `protocol.json.waitingFor`, or the
-collaboration reaches `completed`/`blocked`. The default timeout is 30 minutes
-so inactive collaborations do not leave participant processes waiting forever;
-pass `--timeout 0` only when an external supervisor owns cancellation. When it
-returns, run or inspect:
+Then inspect the next action:
 
 ```bash
 python3 scripts/next_action.py \
@@ -134,31 +139,44 @@ python3 scripts/next_action.py \
   --participant <participant-id>
 ```
 
-Then perform only the allowed action, append the event with
-`scripts/append_event.py`, and loop back to `wait_for_turn.py`. Do not exit after
-one valid event unless the phase is terminal or an explicit coordinator deadline
-was reached.
+Perform only the allowed action, append the required event, and loop until the
+phase is `completed` or `blocked`.
 
 ## Readiness Gate
 
 Before `readiness_passed` or `completed`, `readiness.md` must show:
 
-- Every open question is marked `[resolved]`, `[deferred_nonblocking]`, or
-  `[blocking]`.
-- Every `[deferred_nonblocking]` item includes `Reason: ...`.
-- No `[blocking]` or `[unresolved]` item remains.
-- The checklist item `Ready to implement` is checked.
+- Open questions are resolved, deferred with reasons, or blocking.
+- No blocking or unresolved questions remain.
+- Objective gates are checked.
+- Generated deliverable gates are checked.
+- The primary deliverable has `Status: Frozen`.
+- The primary deliverable SHA-256 snapshot is recorded.
+- `Ready to implement` is checked.
 
-The same question classification must happen before participants accept
-decisions. Acceptance is not valid while unresolved or blocking questions
+Decision acceptance is invalid while unresolved or blocking readiness items
 remain.
 
 ## Final Conclusion
 
-After readiness passes, the collaboration must produce `conclusion.md`. It is
-the decision document a user can act on: do the feature, do not do it, or defer
-it; the rationale; accepted decisions; implementation approach; assumptions;
-follow-ups; blockers; and the next action.
+`conclusion.md` is a final receipt. It must state the outcome
+(`[proceed]`, `[do_not_proceed]`, or `[defer]`), rationale, deliverable receipt,
+accepted decisions summary, readiness result, assumptions, deferred follow-ups,
+implementation blockers, and next action.
+
+`blocked` is a phase/event, not a completable outcome.
+
+## Validate
+
+```bash
+python3 scripts/validate_collaboration.py --folder <collaboration-folder>
+```
+
+Exit codes:
+
+- `0`: validation passed.
+- `1`: validation passed with warnings.
+- `2`: validation failed.
 
 ## License
 

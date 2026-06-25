@@ -1,19 +1,19 @@
 ---
 name: agent-collaboration-protocol
-description: Use when coordinating multiple AI agents, coding assistants, teams, repos, or users through a vendor-neutral shared filesystem protocol. Uses protocol.json, events.jsonl, proposal.md, review.md, decisions.md, readiness.md, strict phases, readiness gates, and validator checks. Requires a collaboration folder, participants, objective, and completion gates before starting.
+description: Use when coordinating multiple AI agents, coding assistants, teams, repos, or users through a vendor-neutral shared filesystem protocol. ACP schema v2 requires protocol.json, events.jsonl, proposal.md, review.md, decisions.md, readiness.md, conclusion.md, a declared Markdown primary deliverable under deliverables/, deliverable lifecycle events, strict phases, readiness gates, SHA-256 freeze checks, and validator checks.
 ---
 
 # Agent Collaboration Protocol
 
-Use a shared folder as a portable coordination bus for agents that cannot
-directly message each other. ACP is a breaking protocol: it is a state
-machine with structured events and readiness gates, not a loose Markdown
-conversation.
+ACP is a shared-folder coordination protocol for agents that cannot directly
+message each other. It is a state machine with structured JSONL events,
+turn ownership, readiness gates, and a frozen deliverable. It is not a loose
+Markdown discussion.
 
-Any compatible agent must be able to read Markdown and JSON, write Markdown,
-append JSONL events, and run or exactly reproduce the bundled script behavior.
-Do not rely on Codex thread APIs, Claude-specific hooks, OpenCode-only state,
-Kiro-only metadata, or hidden conversation memory for correctness.
+Any compatible agent must be able to read and write Markdown/JSON, append JSONL
+events, and run or exactly reproduce the bundled script behavior. Do not rely on
+hidden thread state, vendor-specific APIs, or conversation memory for protocol
+correctness.
 
 ## Required Inputs
 
@@ -21,32 +21,63 @@ Before starting, require:
 
 - `collaboration_folder`: absolute or repo-relative shared folder path.
 - `objective`: what the collaboration must decide or produce.
-- `completion_gates`: concrete gates for ending collaboration.
+- `objective_gates`: objective-specific gates. The protocol generates
+  deliverable gates automatically.
 - `participants`: all participant ids, such as `server`, `reader`, `reviewer`,
   or `agent-a`.
 - `participant_id`: the current agent identity.
+- `primary_deliverable_type`: one of `adr`, `design-spec`,
+  `implementation-plan`, `decision-memo`, `review-report`, `test-plan`, or
+  `custom`.
+- `primary_deliverable_file`: optional for built-in types, required for
+  `custom`; must be Markdown.
+- `primary_deliverable_checklist`: required for `custom`.
+- `deliverables_mode`: optional, defaults to `internal`; `external` requires
+  `repoRoot`.
+- `deliverables_dir`: optional, defaults to `deliverables`.
 
-If any required input is missing, ask for it before creating files or writing
-events. Do not invent completion gates.
+If any required input is missing, ask before creating files or writing events.
+Do not invent objective gates.
 
 ## Files
 
-ACP folders use these files:
+ACP schema v2 folders use these protocol files:
 
-- `protocol.json`: objective, participants, completion gates,
-  current phase, proposal owner, waiting participants, and timestamps.
+- `protocol.json`: `protocol: "acp"`, `schemaVersion: 2`, objective,
+  participants, generated and objective gates, deliverable declaration, current
+  phase, proposal owner, waiting participants, and timestamps.
 - `events.jsonl`: append-only event log. Each line is one compact JSON object.
-- `proposal.md`: current proposal only.
+- `proposal.md`: current proposal/change summary.
 - `review.md`: structured participant reviews.
-- `decisions.md`: accepted decisions only.
-- `readiness.md`: open question classification, blockers, deferred
-  nonblocking items, and implementation readiness.
-- `conclusion.md`: final discussion conclusion. It states whether to proceed,
-  not proceed, defer, or block; why; how to implement or why not; and the next
-  action.
+- `decisions.md`: concise accepted decision index with stable IDs.
+- `readiness.md`: open question classification, objective gates, generated
+  deliverable gates, deliverable snapshot, blockers, and readiness result.
+- `conclusion.md`: final protocol receipt. It is not the primary deliverable.
+- `deliverables/`: actual Markdown deliverables and optional attachments.
 
 Do not create or use `state.log`, `discussion.md`, or `opinions.md`. They are
-not protocol files and must not appear in completion gates or instructions.
+not protocol files and must not appear in gates or instructions.
+
+## Deliverables
+
+ACP separates protocol state from deliverable artifacts:
+
+- Every completable collaboration requires a declared primary Markdown
+  deliverable.
+- `conclusion.md` is the final receipt; it references the frozen deliverable and
+  readiness result.
+- Built-in deliverable types are `adr`, `design-spec`, `implementation-plan`,
+  `decision-memo`, `review-report`, and `test-plan`.
+- `custom` requires an explicit Markdown file and checklist.
+- Supporting deliverables are Markdown. Attachments can be non-Markdown files
+  under the deliverables directory.
+- `internal` mode stores deliverables inside the collaboration folder.
+- `external` mode stores deliverables in a repo-root-relative directory and uses
+  `external:<file>` references in events, readiness, and conclusion.
+- A deliverable must include `Status: Draft`, `Status: In Review`, or
+  `Status: Frozen`.
+- The proposal owner freezes the primary deliverable with
+  `deliverable_frozen`; freeze is strict and has no unfreeze/refreeze path.
 
 ## Initialization
 
@@ -58,19 +89,34 @@ python3 <skill>/scripts/init_collaboration.py \
   --participant <participant_id> \
   --participant <other_participant_id> \
   --objective "<objective>" \
-  --completion "<completion gate>" \
-  --completion "<another gate>"
+  --primary-deliverable-type design-spec \
+  --completion "<objective gate>" \
+  --completion "<another objective gate>"
 ```
 
-The initializer fails if `protocol.json` already exists unless `--resume` is
-provided. Repeated initialization is not an append operation.
+For external deliverables:
+
+```bash
+python3 <skill>/scripts/init_collaboration.py \
+  --folder <repo>/.acp/<run> \
+  --participant <participant_id> \
+  --participant <other_participant_id> \
+  --objective "<objective>" \
+  --primary-deliverable-type adr \
+  --deliverables-mode external \
+  --repo-root ../.. \
+  --deliverables-dir docs/architecture \
+  --completion "<objective gate>"
+```
+
+The initializer creates templates for protocol files and the primary
+deliverable. It fails if `protocol.json` already exists unless `--resume` is
+provided.
 
 ## Events
 
-Use `scripts/append_event.py` or exactly reproduce its behavior. Do not hand
-write events unless the runtime cannot execute scripts.
-
-Required event fields:
+Use `scripts/append_event.py` or exactly reproduce its behavior. Required event
+fields:
 
 - `seq`: continuous integer in `events.jsonl`.
 - `from`: participant id listed in `protocol.json`.
@@ -78,14 +124,12 @@ Required event fields:
 - `at`: ISO-8601 UTC timestamp.
 - `summary`: one short sentence.
 
-Recommended fields:
-
-- `doc`: path relative to collaboration folder.
-- `reply_to`: earlier event `seq`.
-
 Allowed events:
 
 - `initialized`
+- `deliverable_drafted`
+- `deliverable_revised`
+- `deliverable_frozen`
 - `proposal_submitted`
 - `review_submitted`
 - `proposal_revised`
@@ -96,42 +140,44 @@ Allowed events:
 - `completed`
 - `blocked`
 
-All responses must use `reply_to` when they are responding to a prior event.
-`reply_to` must point to an earlier existing event.
-Event timestamps must not move backward as `seq` increases. If a mistake is
-discovered, append `blocked` or a new corrective event; do not rewrite earlier
-events.
+All events after `initialized` require `reply_to` pointing to an earlier event.
+`doc` references are relative to the collaboration folder in internal mode, or
+`external:<file>` in external mode.
+
+All `deliverable_*` events require:
+
+- `doc`: the resolved deliverable reference.
+- `role`: `primary` or `supporting`.
+
+`deliverable_frozen` also requires top-level `sha256`, a 64-character lowercase
+hex SHA-256 of the referenced file. Once frozen, the file content must keep
+matching the hash.
 
 ## Phases
 
 Agents must act according to `protocol.json.currentPhase` and
 `protocol.json.waitingFor`:
 
-- `drafting`: proposal owner updates `proposal.md`, then appends
+- `drafting`: proposal owner drafts the primary deliverable, appends
+  `deliverable_drafted`, updates `proposal.md`, then appends
   `proposal_submitted`.
-- `reviewing`: only participants listed in `waitingFor` append structured
-  reviews to `review.md`, then append `review_submitted`.
-- `revising`: proposal owner addresses required changes and appends
+- `reviewing`: listed reviewers review both `proposal.md` and the primary
+  deliverable, append structured reviews to `review.md`, then append
+  `review_submitted`.
+- `revising`: proposal owner updates `proposal.md` and deliverables as needed,
+  appends `deliverable_revised` if a deliverable changed, then appends
   `proposal_revised`.
-- `decision_review`: proposal owner first classifies every open question in
-  `readiness.md` and appends `question_classified`; only then do participants
-  listed in `waitingFor` accept explicit decisions in `decisions.md` by
-  appending `decision_accepted`.
-- `readiness_check`: participants classify every question, clear blockers, and
-  pass readiness, then the proposal owner writes `conclusion.md`.
+- `decision_review`: proposal owner classifies every open question in
+  `readiness.md` and appends `question_classified`; participants then accept
+  explicit `decisions.md` entries with `decision_accepted`.
+- `readiness_check`: proposal owner freezes required deliverables, records
+  snapshots in `readiness.md`, runs validation, then appends
+  `readiness_passed`.
 - `completed`: stop unless the user explicitly starts a new round.
-- `blocked`: stop until the blocker is resolved.
+- `blocked`: stop until the blocker is resolved or a new round starts.
 
-`completed` is valid only after a prior `readiness_passed` event.
-`completed` must reference `conclusion.md`. Do not complete with only
-`decisions.md`; decisions are inputs, while `conclusion.md` is the final answer
-to the collaboration objective.
-
-The proposal owner must wait after `proposal_submitted`. While phase is
-`reviewing`, the owner may poll for the next action or append `blocked` for a
-real timeout/blocker, but must not edit `proposal.md`, `decisions.md`,
-`readiness.md`, or `protocol.json`, and must not append advancing events until
-the required review is submitted.
+`completed` is valid only after `readiness_passed` and must reference
+`conclusion.md`.
 
 ## Review Format
 
@@ -143,6 +189,14 @@ seq equals that event's `seq`:
 
 Context:
 - Read `proposal.md` after event seq `<seq>`.
+- Reviewed primary deliverable: `<resolved path>`
+- Reviewed supporting deliverables: `<paths or none>`
+
+Review Scope:
+- Proposal coherence
+- Primary deliverable completeness
+- Accepted decision traceability
+- Implementation readiness
 
 Position:
 - ...
@@ -157,63 +211,61 @@ Questions:
 - ...
 ```
 
-Do not use the replied-to event seq in the review heading. Put replied-to
-context in `Context` and `reply_to`.
+## Decisions
+
+`decisions.md` is an accepted decision index, not the deliverable. Every accepted
+decision must use a stable ID:
+
+```markdown
+### D1. <short title>
+
+- Decision: ...
+- Rationale: ...
+- Reflected in: `deliverables/design-spec.md#section`
+```
+
+IDs must be sequential (`D1`, `D2`, ...). `Reflected in:` must point to a
+declared primary or supporting deliverable.
 
 ## Readiness Gate
 
 Before `readiness_passed` or `completed`:
 
-- Every open question must be classified as `[resolved]`,
-  `[deferred_nonblocking]`, or `[blocking]`.
-- Every `[deferred_nonblocking]` item must include `Reason: ...`.
-- No `[blocking]` or `[unresolved]` item may remain.
-- The final design checklist must include and check `Ready to implement`.
-- `validate_collaboration.py` must pass.
+- Every open question is `[resolved]`, `[deferred_nonblocking]`, or
+  `[blocking]`.
+- Every `[deferred_nonblocking]` item includes `Reason: ...`.
+- No `[blocking]` or `[unresolved]` item remains.
+- Objective gates are checked.
+- Generated deliverable gates are checked.
+- The primary deliverable has `Status: Frozen`.
+- The primary deliverable SHA-256 snapshot is recorded.
+- `Ready to implement` is checked.
+- `validate_collaboration.py` passes.
 
-Blocking readiness items also prevent `decision_accepted`.
-Unresolved questions and deferred items missing `Reason: ...` also prevent
-`decision_accepted`.
-
-Final design documents must separate:
-
-- Accepted Decisions
-- Assumptions
-- Deferred Follow-ups
-- Implementation Blockers
-- Ready to Implement
+Blocking or unresolved readiness items also prevent `decision_accepted`.
 
 ## Final Conclusion
 
-Before `completed`, write `conclusion.md` as a conclusion document, not a log.
-It must include:
+Before `completed`, write `conclusion.md` as a final receipt. It must include:
 
 - Decision Outcome: exactly one of `[proceed]`, `[do_not_proceed]`, or
   `[defer]`.
 - Rationale.
-- Accepted Decisions.
-- Implementation Approach.
+- Deliverable Receipt: primary path, type, SHA-256, supporting deliverables, and
+  attachments.
+- Accepted Decisions Summary.
+- Readiness Result.
 - Assumptions.
 - Deferred Follow-ups.
 - Implementation Blockers.
 - Next Action.
 
-Use `[proceed]` when implementation should start now, `[do_not_proceed]` when
-the feature or plan should not be done, and `[defer]` when follow-up work must
-happen before implementation. A `[blocked]` outcome may exist while the
-collaboration is blocked, but it is not completable.
+`blocked` is a phase/event, not a completable outcome.
 
 ## Polling And Watchers
 
 Participants must stay alive for the collaboration loop until the phase is
-`completed`, `blocked`, or an explicit user/coordinator deadline is reached.
-Do not stop merely because you appended one valid event. After every action,
-read `protocol.json` again and either take the next allowed action or wait for
-the next event.
-
-If the runtime has a watcher, it may notify the participant when `events.jsonl`
-or `protocol.json` changes. The watcher must stay dumb: it only notices changes
-and never writes analysis or decisions.
+`completed`, `blocked`, or an explicit coordinator deadline is reached.
 
 If there is no watcher, use:
 
@@ -223,7 +275,7 @@ python3 <skill>/scripts/next_action.py \
   --participant <participant_id>
 ```
 
-For autonomous participants, prefer the blocking helper:
+For autonomous participants, prefer:
 
 ```bash
 python3 <skill>/scripts/wait_for_turn.py \
@@ -233,16 +285,8 @@ python3 <skill>/scripts/wait_for_turn.py \
 
 `wait_for_turn.py` returns when the participant is listed in `waitingFor`, or
 when the collaboration becomes `completed` or `blocked`. It defaults to a
-30-minute timeout to avoid permanently stuck participant processes; use
-`--timeout 0` only when an external supervisor owns cancellation. On return,
-inspect `next_action.py`, act if it is your turn, append the required event, and
-repeat the wait/action loop. Manual user prompts such as "check the new opinion"
-are a fallback only, not the intended collaboration loop.
-
-Coordinator prompts that launch participants should ask each participant to run
-this loop instead of doing one phase and exiting. A participant that is not
-listed in `waitingFor` may block in `wait_for_turn.py`, but must not edit shared
-state while waiting.
+30-minute timeout; use `--timeout 0` only when an external supervisor owns
+cancellation.
 
 ## Validation
 
@@ -252,13 +296,13 @@ Run:
 python3 <skill>/scripts/validate_collaboration.py --folder <collaboration_folder>
 ```
 
-The validator checks required files, absence of obsolete files, event shape,
-seq continuity, timestamp monotonicity, phase transitions, `waitingFor`
-ownership, `reply_to`, review heading seqs, readiness classification,
-conclusion completeness, and completion ordering.
+The validator checks required protocol files, schema v2 fields, deliverable
+declarations, path safety, event shape, deliverable roles and hashes, phase
+transitions, review headings, decision IDs, readiness gates, frozen deliverable
+content, conclusion receipt, and completion ordering.
 
 Exit codes:
 
-- `0`: valid.
-- `1`: valid with warnings.
-- `2`: invalid.
+- `0`: validation passed.
+- `1`: validation passed with warnings.
+- `2`: validation failed.

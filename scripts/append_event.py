@@ -13,6 +13,8 @@ def main() -> int:
     parser.add_argument("--summary", required=True, help="Short event summary")
     parser.add_argument("--doc", help="Document path relative to the collaboration folder")
     parser.add_argument("--reply-to", type=int, help="Earlier event seq this event responds to")
+    parser.add_argument("--role", choices=["primary", "supporting"], help="Deliverable role for deliverable_* events")
+    parser.add_argument("--sha256", help="64-character lowercase hex SHA-256 for deliverable_frozen")
     args = parser.parse_args()
 
     try:
@@ -23,6 +25,8 @@ def main() -> int:
             args.summary,
             args.doc,
             args.reply_to,
+            args.role,
+            args.sha256,
         )
     except ProtocolError as exc:
         parser.exit(2, f"error: {exc}\n")
@@ -33,4 +37,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

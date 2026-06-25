@@ -42,21 +42,21 @@ def main() -> int:
 
     if phase == "drafting":
         if args.participant in waiting_for:
-            print("next action: update proposal.md, then append proposal_submitted.")
+            print("next action: draft the primary deliverable, append deliverable_drafted, update proposal.md, then append proposal_submitted.")
         else:
             print("next action: wait for the proposal owner to submit the proposal.")
     elif phase == "reviewing":
         proposal = last_event(events, "proposal_submitted") or last_event(events, "proposal_revised")
         if args.participant in waiting_for and proposal and proposal.get("from") != args.participant:
-            print("next action: append a structured review to review.md, then append review_submitted.")
+            print("next action: review proposal.md and the primary deliverable, update review.md with Review Scope, then append review_submitted.")
         elif args.participant == proposal_owner:
-            print("next action: wait for the listed reviewer(s); do not edit proposal.md, decisions.md, readiness.md, or protocol.json unless blocking the collaboration.")
+            print("next action: wait for the listed reviewer(s); do not edit proposal.md or deliverables while reviewing unless blocking the collaboration.")
         else:
             print("next action: wait for the listed reviewer(s) to submit review_submitted or blocked.")
     elif phase == "revising":
         review = last_event(events, "review_submitted")
         if args.participant in waiting_for and review and review.get("from") != args.participant:
-            print("next action: revise proposal.md, address required changes, then append proposal_revised.")
+            print("next action: revise proposal.md and deliverables as needed, append deliverable_revised if the deliverable changed, then append proposal_revised.")
         else:
             print("next action: wait for the proposal owner to revise.")
     elif phase == "decision_review":
@@ -72,8 +72,10 @@ def main() -> int:
             print("next action: complete the final design checklist in readiness.md.")
         elif not any(event.get("event") == "readiness_passed" for event in events):
             print("next action: run validate_collaboration.py, then append readiness_passed.")
-        elif validate_conclusion_for_completion(folder):
-            print("next action: write conclusion.md with the final outcome, rationale, implementation approach, and next action.")
+        elif not any(event.get("event") == "deliverable_frozen" and event.get("role") == "primary" for event in events):
+            print("next action: freeze the primary deliverable with deliverable_frozen, run validate_collaboration.py, then append readiness_passed.")
+        elif validate_conclusion_for_completion(folder, protocol):
+            print("next action: write conclusion.md with the final outcome, deliverable receipt, readiness result, and next action.")
         else:
             print("next action: run validate_collaboration.py, then append completed with doc=conclusion.md.")
     elif phase == "completed":
