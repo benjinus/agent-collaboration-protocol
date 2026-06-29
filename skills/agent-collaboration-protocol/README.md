@@ -70,8 +70,10 @@ If your agent does not support `skills add`, clone the repository manually:
 git clone https://github.com/agi-connect/agent-collaboration-protocol.git
 ```
 
-Then point your agent at the repository's `SKILL.md`, or copy the repository
-into the skill or instruction directory your agent reads from.
+Then point your agent at
+`skills/agent-collaboration-protocol/SKILL.md`, or copy
+`skills/agent-collaboration-protocol/` into the skill or instruction directory
+your agent reads from.
 
 ## Use the Skill
 

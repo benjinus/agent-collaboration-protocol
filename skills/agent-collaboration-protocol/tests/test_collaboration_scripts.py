@@ -9,7 +9,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 DOC_SUFFIXES = {".md", ".yaml", ".yml"}
-PACKAGE = ROOT / "skills" / "agent-collaboration-protocol"
+PACKAGE = ROOT
 PACKAGE_INIT = PACKAGE / "scripts" / "init_collaboration.py"
 PACKAGE_APPEND = PACKAGE / "scripts" / "append_event.py"
 PACKAGE_VALIDATE = PACKAGE / "scripts" / "validate_collaboration.py"
@@ -50,7 +50,6 @@ class CollaborationScriptsTest(unittest.TestCase):
     def test_installable_package_contains_runtime_files(self) -> None:
         missing = [name for name in REQUIRED_PACKAGE_FILES if not (PACKAGE / name).is_file()]
         self.assertEqual(missing, [])
-        self.assertFalse((ROOT / "SKILL.md").exists())
 
         skill_text = (PACKAGE / "SKILL.md").read_text(encoding="utf-8")
         self.assertIn("name: agent-collaboration-protocol", skill_text)
@@ -58,13 +57,8 @@ class CollaborationScriptsTest(unittest.TestCase):
         self.assertIn("references/open-agent-installation.md", "\n".join(REQUIRED_PACKAGE_FILES))
 
     def assert_same_text_file(self, root_relative: str) -> None:
-        root_file = ROOT / root_relative
         package_file = PACKAGE / root_relative
-        self.assertEqual(
-            package_file.read_text(encoding="utf-8"),
-            root_file.read_text(encoding="utf-8"),
-            root_relative,
-        )
+        self.assertTrue(package_file.is_file(), root_relative)
 
     def test_installable_package_stays_in_sync_with_root_runtime_files(self) -> None:
         for path in [
@@ -82,7 +76,7 @@ class CollaborationScriptsTest(unittest.TestCase):
     def test_packaged_docs_use_current_repo_owner(self) -> None:
         docs = {
             f"{label}:{path.relative_to(base).as_posix()}": path.read_text(encoding="utf-8")
-            for label, base in [("root", ROOT), ("package", PACKAGE)]
+            for label, base in [("package", PACKAGE)]
             for path in base.rglob("*")
             if path.is_file() and path.suffix in DOC_SUFFIXES and ".git" not in path.parts
         }
@@ -90,12 +84,9 @@ class CollaborationScriptsTest(unittest.TestCase):
         stale_paths = [name for name, text in docs.items() if stale_owner in text]
         self.assertEqual(stale_paths, [])
 
-        for install_reference in [
-            docs["root:references/open-agent-installation.md"],
-            docs["package:references/open-agent-installation.md"],
-        ]:
-            self.assertIn("npx skills add agi-connect/agent-collaboration-protocol", install_reference)
-            self.assertIn("https://github.com/agi-connect/agent-collaboration-protocol.git", install_reference)
+        install_reference = docs["package:references/open-agent-installation.md"]
+        self.assertIn("npx skills add agi-connect/agent-collaboration-protocol", install_reference)
+        self.assertIn("https://github.com/agi-connect/agent-collaboration-protocol.git", install_reference)
 
     def init_folder(self, folder: Path) -> subprocess.CompletedProcess[str]:
         return run_script(

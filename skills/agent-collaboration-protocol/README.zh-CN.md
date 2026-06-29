@@ -57,7 +57,8 @@ npx skills add agi-connect/agent-collaboration-protocol
 git clone https://github.com/agi-connect/agent-collaboration-protocol.git
 ```
 
-然后让智能体读取仓库中的 `SKILL.md`，或者把仓库复制到该智能体会读取的技能目录或指令目录中。
+然后让智能体读取 `skills/agent-collaboration-protocol/SKILL.md`，或者把
+`skills/agent-collaboration-protocol/` 复制到该智能体会读取的技能目录或指令目录中。
 
 ## 使用这个技能
 

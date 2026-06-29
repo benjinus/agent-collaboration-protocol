@@ -44,8 +44,9 @@ valid install must include `SKILL.md`, `scripts/`, and `references/`.
 Manual fallback:
 
 - Clone `https://github.com/agi-connect/agent-collaboration-protocol.git`.
-- Copy the cloned folder into the runtime's skill or instruction directory, or
-  reference `SKILL.md` from the cloned folder.
+- Copy `skills/agent-collaboration-protocol/` into the runtime's skill or
+  instruction directory, or reference
+  `skills/agent-collaboration-protocol/SKILL.md` from the cloned folder.
 - Ensure the runtime can execute or reproduce `init_collaboration.py`,
   `append_event.py`, `next_action.py`, `wait_for_turn.py`, and
   `validate_collaboration.py`.
@@ -61,8 +62,9 @@ Manual fallback:
 When no native skill mechanism exists, give the agent this instruction:
 
 ```text
-Use Agent Collaboration Protocol from <path>/SKILL.md. Your participant_id
-is <id>. The collaboration folder is <folder>. The objective is <objective>.
+Use Agent Collaboration Protocol from
+<path>/skills/agent-collaboration-protocol/SKILL.md. Your participant_id is
+<id>. The collaboration folder is <folder>. The objective is <objective>.
 The participants are <participants>. The completion gates are <gates>. Read
 protocol.json, events.jsonl, proposal.md, review.md, decisions.md, and
 readiness.md. Write conclusion.md before completion. Use append_event.py or

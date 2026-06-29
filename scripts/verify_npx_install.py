@@ -11,6 +11,9 @@ from pathlib import Path
 
 REQUIRED_FILES = [
     "SKILL.md",
+    "README.md",
+    "README.zh-CN.md",
+    "LICENSE",
     "references/open-agent-installation.md",
     "scripts/_acp.py",
     "scripts/init_collaboration.py",
@@ -18,6 +21,7 @@ REQUIRED_FILES = [
     "scripts/next_action.py",
     "scripts/wait_for_turn.py",
     "scripts/validate_collaboration.py",
+    "tests/test_collaboration_scripts.py",
 ]
 
 
@@ -76,7 +80,7 @@ def main() -> int:
                 "npx",
                 "skills",
                 "add",
-                args.source,
+                str(Path(args.source).resolve()) if args.source.startswith((".", "/")) else args.source,
                 "-g",
                 "-a",
                 args.agent,
