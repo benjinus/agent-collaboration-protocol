@@ -8,12 +8,31 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-INIT = ROOT / "scripts" / "init_collaboration.py"
-APPEND = ROOT / "scripts" / "append_event.py"
-VALIDATE = ROOT / "scripts" / "validate_collaboration.py"
-WAIT = ROOT / "scripts" / "wait_for_turn.py"
-NEXT_ACTION = ROOT / "scripts" / "next_action.py"
 DOC_SUFFIXES = {".md", ".yaml", ".yml"}
+PACKAGE = ROOT / "skills" / "agent-collaboration-protocol"
+PACKAGE_INIT = PACKAGE / "scripts" / "init_collaboration.py"
+PACKAGE_APPEND = PACKAGE / "scripts" / "append_event.py"
+PACKAGE_VALIDATE = PACKAGE / "scripts" / "validate_collaboration.py"
+PACKAGE_WAIT = PACKAGE / "scripts" / "wait_for_turn.py"
+PACKAGE_NEXT_ACTION = PACKAGE / "scripts" / "next_action.py"
+REQUIRED_PACKAGE_FILES = [
+    "SKILL.md",
+    "README.md",
+    "README.zh-CN.md",
+    "LICENSE",
+    "references/open-agent-installation.md",
+    "scripts/_acp.py",
+    "scripts/init_collaboration.py",
+    "scripts/append_event.py",
+    "scripts/next_action.py",
+    "scripts/wait_for_turn.py",
+    "scripts/validate_collaboration.py",
+]
+INIT = PACKAGE_INIT
+APPEND = PACKAGE_APPEND
+VALIDATE = PACKAGE_VALIDATE
+WAIT = PACKAGE_WAIT
+NEXT_ACTION = PACKAGE_NEXT_ACTION
 
 
 def run_script(*args: str | Path, cwd: Path | None = None) -> subprocess.CompletedProcess[str]:
@@ -27,6 +46,15 @@ def run_script(*args: str | Path, cwd: Path | None = None) -> subprocess.Complet
 
 
 class CollaborationScriptsTest(unittest.TestCase):
+    def test_installable_package_contains_runtime_files(self) -> None:
+        missing = [name for name in REQUIRED_PACKAGE_FILES if not (PACKAGE / name).is_file()]
+        self.assertEqual(missing, [])
+
+        skill_text = (PACKAGE / "SKILL.md").read_text(encoding="utf-8")
+        self.assertIn("name: agent-collaboration-protocol", skill_text)
+        self.assertIn("scripts/init_collaboration.py", skill_text)
+        self.assertIn("references/open-agent-installation.md", "\n".join(REQUIRED_PACKAGE_FILES))
+
     def test_packaged_docs_use_current_repo_owner(self) -> None:
         docs = {
             path.relative_to(ROOT).as_posix(): path.read_text(encoding="utf-8")
