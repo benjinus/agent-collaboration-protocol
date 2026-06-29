@@ -60,8 +60,9 @@ The recommended installation method is `npx skills add`:
 npx skills add agi-connect/agent-collaboration-protocol
 ```
 
-This installs the skill into the local skills directory used by compatible
-agents.
+This installs the complete skill package from
+`skills/agent-collaboration-protocol/`, including `SKILL.md`, the Python helper
+scripts, and the portable installation reference.
 
 If your agent does not support `skills add`, clone the repository manually:
 
