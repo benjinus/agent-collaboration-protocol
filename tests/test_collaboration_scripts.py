@@ -13,6 +13,7 @@ APPEND = ROOT / "scripts" / "append_event.py"
 VALIDATE = ROOT / "scripts" / "validate_collaboration.py"
 WAIT = ROOT / "scripts" / "wait_for_turn.py"
 NEXT_ACTION = ROOT / "scripts" / "next_action.py"
+DOC_SUFFIXES = {".md", ".yaml", ".yml"}
 
 
 def run_script(*args: str | Path, cwd: Path | None = None) -> subprocess.CompletedProcess[str]:
@@ -26,6 +27,19 @@ def run_script(*args: str | Path, cwd: Path | None = None) -> subprocess.Complet
 
 
 class CollaborationScriptsTest(unittest.TestCase):
+    def test_packaged_docs_use_current_repo_owner(self) -> None:
+        docs = {
+            path.relative_to(ROOT).as_posix(): path.read_text(encoding="utf-8")
+            for path in ROOT.rglob("*")
+            if path.is_file() and path.suffix in DOC_SUFFIXES and ".git" not in path.parts
+        }
+        stale_paths = [name for name, text in docs.items() if "benjinus" in text]
+        self.assertEqual(stale_paths, [])
+
+        install_reference = docs["references/open-agent-installation.md"]
+        self.assertIn("npx skills add agi-connect/agent-collaboration-protocol", install_reference)
+        self.assertIn("https://github.com/agi-connect/agent-collaboration-protocol.git", install_reference)
+
     def init_folder(self, folder: Path) -> subprocess.CompletedProcess[str]:
         return run_script(
             INIT,

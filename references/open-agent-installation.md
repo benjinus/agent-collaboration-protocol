@@ -34,7 +34,7 @@ The canonical behavior is in `SKILL.md`. The helper scripts are part of the prot
 Preferred installer:
 
 ```bash
-npx skills add benjinus/agent-collaboration-protocol
+npx skills add agi-connect/agent-collaboration-protocol
 ```
 
 The `skills` CLI detects supported agents and installs the skill into the
@@ -42,7 +42,7 @@ selected agent locations.
 
 Manual fallback:
 
-- Clone `https://github.com/benjinus/agent-collaboration-protocol.git`.
+- Clone `https://github.com/agi-connect/agent-collaboration-protocol.git`.
 - Copy the cloned folder into the runtime's skill or instruction directory, or
   reference `SKILL.md` from the cloned folder.
 - Ensure the runtime can execute or reproduce `init_collaboration.py`,
