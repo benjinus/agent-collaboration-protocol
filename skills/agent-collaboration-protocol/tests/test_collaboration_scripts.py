@@ -56,11 +56,11 @@ class CollaborationScriptsTest(unittest.TestCase):
         self.assertIn("scripts/init_collaboration.py", skill_text)
         self.assertIn("references/open-agent-installation.md", "\n".join(REQUIRED_PACKAGE_FILES))
 
-    def assert_same_text_file(self, root_relative: str) -> None:
-        package_file = PACKAGE / root_relative
-        self.assertTrue(package_file.is_file(), root_relative)
+    def assert_package_file_exists(self, package_relative: str) -> None:
+        package_file = PACKAGE / package_relative
+        self.assertTrue(package_file.is_file(), package_relative)
 
-    def test_installable_package_stays_in_sync_with_root_runtime_files(self) -> None:
+    def test_installable_package_runtime_files_exist(self) -> None:
         for path in [
             "LICENSE",
             "references/open-agent-installation.md",
@@ -71,7 +71,7 @@ class CollaborationScriptsTest(unittest.TestCase):
             "scripts/wait_for_turn.py",
             "scripts/validate_collaboration.py",
         ]:
-            self.assert_same_text_file(path)
+            self.assert_package_file_exists(path)
 
     def test_packaged_docs_use_current_repo_owner(self) -> None:
         docs = {

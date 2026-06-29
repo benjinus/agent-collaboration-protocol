@@ -62,7 +62,7 @@ npx skills add agi-connect/agent-collaboration-protocol
 
 This installs the complete skill package from
 `skills/agent-collaboration-protocol/`, including `SKILL.md`, the Python helper
-scripts, and the portable installation reference.
+scripts, the portable installation reference, and package-local tests.
 
 If your agent does not support `skills add`, clone the repository manually:
 
@@ -74,6 +74,11 @@ Then point your agent at
 `skills/agent-collaboration-protocol/SKILL.md`, or copy
 `skills/agent-collaboration-protocol/` into the skill or instruction directory
 your agent reads from.
+
+The repository root intentionally does not contain a `SKILL.md`, `scripts/`,
+`references/`, or `tests/` runtime copy. Keeping the installable package only
+under `skills/agent-collaboration-protocol/` ensures `npx skills add` installs
+the complete folder instead of a stale root entrypoint.
 
 ## Use the Skill
 

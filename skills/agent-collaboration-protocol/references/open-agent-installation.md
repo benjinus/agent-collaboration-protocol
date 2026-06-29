@@ -39,7 +39,9 @@ npx skills add agi-connect/agent-collaboration-protocol
 
 The `skills` CLI detects supported agents and installs the package from
 `skills/agent-collaboration-protocol/` into the selected agent locations. A
-valid install must include `SKILL.md`, `scripts/`, and `references/`.
+valid install must include `SKILL.md`, `scripts/`, `references/`, and `tests/`.
+The repository root intentionally has no `SKILL.md` runtime entrypoint, so the
+nested skill directory is the only install target.
 
 Manual fallback:
 

@@ -49,7 +49,7 @@ npx skills add agi-connect/agent-collaboration-protocol
 ```
 
 这会从 `skills/agent-collaboration-protocol/` 安装完整技能包，包括
-`SKILL.md`、Python 辅助脚本和可移植安装参考。
+`SKILL.md`、Python 辅助脚本、可移植安装参考和包内测试。
 
 如果你的智能体不支持 `skills add`，也可以手动克隆仓库：
 
@@ -59,6 +59,10 @@ git clone https://github.com/agi-connect/agent-collaboration-protocol.git
 
 然后让智能体读取 `skills/agent-collaboration-protocol/SKILL.md`，或者把
 `skills/agent-collaboration-protocol/` 复制到该智能体会读取的技能目录或指令目录中。
+
+仓库根目录刻意不再保留 `SKILL.md`、`scripts/`、`references/` 或 `tests/`
+运行时副本。安装包只放在 `skills/agent-collaboration-protocol/` 下，可以确保
+`npx skills add` 安装完整目录，而不是旧的根入口文件。
 
 ## 使用这个技能
 
