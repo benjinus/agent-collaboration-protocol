@@ -266,6 +266,21 @@ Before `completed`, write `conclusion.md` as a final receipt. It must include:
 
 Participants must stay alive for the collaboration loop until the phase is
 `completed`, `blocked`, or an explicit coordinator deadline is reached.
+Do not send a final response to the user merely because the current turn ended.
+If the collaboration is still active, immediately re-enter the wait/action loop.
+
+The autonomous participant loop is:
+
+1. Run `wait_for_turn.py --folder <collaboration_folder> --participant
+   <participant_id>`.
+2. If it reports `completed` or `blocked`, stop and report the terminal state.
+3. If it reports that this participant is ready, perform the printed
+   `next_action.py` action completely.
+4. Append the required event with `append_event.py`.
+5. Immediately return to step 1 without waiting for the user to prompt again.
+
+After every protocol event you append, repeat this loop until terminal state.
+The user is not the scheduler for normal phase advancement.
 
 If there is no watcher, use:
 
@@ -284,9 +299,10 @@ python3 <skill>/scripts/wait_for_turn.py \
 ```
 
 `wait_for_turn.py` returns when the participant is listed in `waitingFor`, or
-when the collaboration becomes `completed` or `blocked`. It defaults to a
-30-minute timeout; use `--timeout 0` only when an external supervisor owns
-cancellation.
+when the collaboration becomes `completed` or `blocked`. It defaults to no
+timeout so autonomous participants can stay blocked until another participant
+advances the protocol. Use a positive `--timeout` only when an external
+supervisor owns cancellation.
 
 ## Validation
 

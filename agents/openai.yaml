@@ -1,4 +1,4 @@
 interface:
   display_name: "Agent Collaboration Protocol"
   short_description: "Vendor-neutral collaboration with phases and readiness gates"
-  default_prompt: "Use $agent-collaboration-protocol to set up or participate in an ACP file collaboration workspace. Ask me for the collaboration folder, participants, objective, and completion gates if they are not provided. Run the participant wait/action loop with wait_for_turn.py and next_action.py until completed or blocked; do not stop after one event. Use validate_collaboration.py before readiness or completion."
+  default_prompt: "Use $agent-collaboration-protocol to set up or participate in an ACP file collaboration workspace. Ask me for the collaboration folder, participants, objective, and completion gates if they are not provided. Run the participant wait/action loop with wait_for_turn.py and next_action.py until completed or blocked; after every event you append, immediately wait again instead of waiting for the user to coordinate the next phase. Use validate_collaboration.py before readiness or completion."

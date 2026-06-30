@@ -592,6 +592,18 @@ Start implementation.
             self.assertIn("ready: phase is completed", result.stdout)
             self.assertIn("next action: stop; collaboration is complete", result.stdout)
 
+    def test_autonomous_wait_loop_defaults_to_no_timeout(self) -> None:
+        wait_text = WAIT.read_text(encoding="utf-8")
+        skill_text = (PACKAGE / "SKILL.md").read_text(encoding="utf-8")
+        reference_text = (PACKAGE / "references" / "open-agent-installation.md").read_text(encoding="utf-8")
+        agent_text = (ROOT.parent.parent / "agents" / "openai.yaml").read_text(encoding="utf-8")
+
+        self.assertIn("DEFAULT_TIMEOUT_SECONDS = 0", wait_text)
+        self.assertIn("After every protocol event you append, repeat this loop until terminal state.", skill_text)
+        self.assertIn("The user is not the scheduler for normal phase advancement.", skill_text)
+        self.assertIn("the default wait timeout is no timeout", reference_text)
+        self.assertIn("immediately wait again instead of waiting for the user", agent_text)
+
     def test_external_mode_uses_repo_relative_dir_and_external_refs(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             repo = Path(tmp) / "repo"

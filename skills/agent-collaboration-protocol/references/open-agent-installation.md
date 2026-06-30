@@ -24,8 +24,8 @@ An agent runtime is compatible when it can:
 - Treat `events.jsonl` as append-only. Do not rewrite earlier events to fix a
   sequence, phase, or timestamp mistake.
 - Keep running the wait/action loop until `completed`, `blocked`, or an
-  explicit coordinator deadline. Do not stop after a single event if the
-  collaboration is still active.
+  explicit coordinator deadline. After appending any event, immediately wait
+  again. Do not stop after a single event if the collaboration is still active.
 
 The canonical behavior is in `SKILL.md`. The helper scripts are part of the protocol contract, not just examples.
 
@@ -72,11 +72,12 @@ protocol.json, events.jsonl, proposal.md, review.md, decisions.md, and
 readiness.md. Write conclusion.md before completion. Use append_event.py or
 exactly reproduce its event behavior. Use next_action.py when no watcher exists.
 Use wait_for_turn.py to block until it is your turn or the phase is terminal;
-the default wait timeout is 30 minutes, and --timeout 0 means no timeout only
-when an external supervisor owns cancellation. Run validate_collaboration.py
+the default wait timeout is no timeout, and a positive --timeout should be used
+only when an external supervisor owns cancellation. Run validate_collaboration.py
 before readiness_passed and completed. Respect protocol.json.waitingFor; if
 your participant id is not listed there, wait instead of editing shared state.
-After each event, repeat the wait/action loop until completed or blocked.
+After each event, immediately repeat the wait/action loop until completed or
+blocked. Do not wait for the user to coordinate the next phase.
 ```
 
 This is the minimum needed for any capable file-writing agent to participate.

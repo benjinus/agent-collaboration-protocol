@@ -9,7 +9,7 @@ from _acp import ProtocolError, load_protocol, participant_ids, read_events
 
 
 TERMINAL_PHASES = {"completed", "blocked"}
-DEFAULT_TIMEOUT_SECONDS = 30 * 60
+DEFAULT_TIMEOUT_SECONDS = 0
 
 
 def state_signature(folder: Path) -> tuple[float, float, int]:
@@ -63,7 +63,7 @@ def main() -> int:
         "--timeout",
         type=float,
         default=DEFAULT_TIMEOUT_SECONDS,
-        help="Maximum seconds to wait; defaults to 1800 seconds. Use 0 for no timeout.",
+        help="Maximum seconds to wait; defaults to 0, which means no timeout.",
     )
     args = parser.parse_args()
 
